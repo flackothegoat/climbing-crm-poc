@@ -1,0 +1,27 @@
+{$APP_DOMAIN} {
+  encode zstd gzip
+
+  @nextStatic path /_next/static/*
+  header @nextStatic >Cache-Control "public, max-age=31536000, immutable"
+
+  @wallAssets path /walls/*
+  header @wallAssets >Cache-Control "public, max-age=86400, stale-while-revalidate=604800"
+
+  @backend path /backend/*
+  handle @backend {
+    header >Cache-Control "private, no-store"
+    uri replace /backend /api
+    reverse_proxy api:3101
+  }
+
+  handle {
+    reverse_proxy web:3100
+  }
+
+  header {
+    Strict-Transport-Security "max-age=31536000; includeSubDomains"
+    X-Content-Type-Options "nosniff"
+    Referrer-Policy "strict-origin-when-cross-origin"
+    -Server
+  }
+}

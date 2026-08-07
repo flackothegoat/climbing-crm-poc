@@ -1,0 +1,700 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum MembershipRole {
+  L1_ADMIN
+  L2_ADMIN
+}
+
+enum AccountStatus {
+  ACTIVE
+  DISABLED
+}
+
+enum MembershipStatus {
+  ACTIVE
+  DISABLED
+}
+
+enum InvitationStatus {
+  PENDING
+  ACCEPTED
+  REVOKED
+}
+
+enum HoldStatus {
+  ACTIVE
+  ARCHIVED
+}
+
+enum HoldCategorySource {
+  DEFAULT
+  CUSTOM
+}
+
+enum HoldGripType {
+  JUG
+  CRIMP
+  SLOPER
+  PINCH
+  POCKET
+  FOOTHOLD
+  VOLUME
+  OTHER
+}
+
+enum HoldSizeClass {
+  XS
+  S
+  M
+  L
+  XL
+  XXL
+}
+
+enum HoldMountingType {
+  BOLT_ON
+  SCREW_ON
+  DUAL
+  UNKNOWN
+}
+
+enum InventoryBucket {
+  WAREHOUSE
+  INSTALLED
+  RESERVED
+  MAINTENANCE
+}
+
+enum InventoryMovementType {
+  INITIAL_BALANCE
+  RECEIPT
+  ADJUSTMENT
+  REVERSAL
+  INSTALL
+  REMOVE
+  RESERVE
+  RELEASE
+  MAINTENANCE_IN
+  MAINTENANCE_OUT
+  RETIRE
+  RECORD_DELETION
+}
+
+enum InventoryVerificationStatus {
+  UNVERIFIED
+  PARTIAL
+  VERIFIED
+}
+
+enum HoldScanStatus {
+  DRAFT
+  COMPLETED
+  CANCELLED
+}
+
+enum HoldScanMode {
+  CREATE_SPECIFICATION
+  ENRICH_SPECIFICATION
+}
+
+enum HoldAssetKind {
+  MODEL_3D
+  MODEL_PREVIEW
+  PHOTO_FRONT
+  PHOTO_BACK
+  PHOTO_MEASUREMENT
+  PHOTO_OTHER
+}
+
+enum HoldAssetStatus {
+  READY
+  FAILED
+  DELETED
+}
+
+enum HoldInitializationStatus {
+  ACTIVE
+  COMPLETED
+  CANCELLED
+}
+
+enum HoldIdentitySource {
+  MANUAL
+  SCAN
+}
+
+enum WallStatus {
+  ACTIVE
+  RETIRED
+}
+
+enum WallCalibrationStatus {
+  SURVEY_ESTIMATE
+  FIELD_CALIBRATED
+}
+
+enum WallHoleStatus {
+  AVAILABLE
+  MISSING
+  CLOSED
+  DAMAGED
+}
+
+enum RouteStatus {
+  DRAFT
+  READY_FOR_INSTALL
+  PUBLISHED
+  INACTIVE
+  REMOVED
+}
+
+enum RouteVersionStatus {
+  DRAFT
+  PUBLISHED
+  RETIRED
+}
+
+enum RouteDataSource {
+  DUMMY
+  MANUAL
+  IMPORTED
+}
+
+enum RoutePlacementRole {
+  START
+  NORMAL
+  FINISH
+}
+
+enum ClimbObservationOutcome {
+  COMPLETED
+  FAILED
+  ABANDONED
+  UNKNOWN
+}
+
+enum ClimbObservationSource {
+  DUMMY
+  MANUAL
+  CAMERA
+}
+
+model Account {
+  id                               String                    @id @default(cuid())
+  email                            String                    @unique
+  passwordHash                     String
+  status                           AccountStatus             @default(ACTIVE)
+  memberships                      Membership[]
+  sessions                         AuthSession[]
+  sentInvitations                  StaffInvitation[]         @relation("InvitationSender")
+  acceptedInvitations              StaffInvitation[]         @relation("InvitationAcceptor")
+  createdHoldModels                HoldModel[]               @relation("HoldModelCreator")
+  createdHoldCategories            HoldCategory[]            @relation("HoldCategoryCreator")
+  holdInventoryMovements           HoldInventoryMovement[]   @relation("HoldMovementActor")
+  capturedHoldScans                HoldScan[]                @relation("HoldScanCreator")
+  createdHoldAssets                HoldAsset[]               @relation("HoldAssetCreator")
+  deletedHoldVariants              HoldVariant[]             @relation("HoldVariantDeleter")
+  startedHoldInitializations       HoldInitializationBatch[] @relation("HoldInitializationStarter")
+  completedHoldInitializations     HoldInitializationBatch[] @relation("HoldInitializationCompleter")
+  createdHoldInitializationEntries HoldInitializationEntry[] @relation("HoldInitializationEntryCreator")
+  createdRouteVersions             RouteVersion[]            @relation("RouteVersionCreator")
+  createdClimbObservations         ClimbObservation[]        @relation("ClimbObservationCreator")
+  createdAt                        DateTime                  @default(now())
+  updatedAt                        DateTime                  @updatedAt
+}
+
+model Organization {
+  id                        String                    @id @default(cuid())
+  name                      String
+  memberships               Membership[]
+  invitations               StaffInvitation[]
+  holdModels                HoldModel[]
+  holdCategories            HoldCategory[]
+  holdInventoryMovements    HoldInventoryMovement[]
+  holdScans                 HoldScan[]
+  holdAssets                HoldAsset[]
+  holdInitializationBatches HoldInitializationBatch[]
+  wallAreas                 WallArea[]
+  wallSegments              WallSegment[]
+  wallHoles                 WallHole[]
+  routes                    Route[]
+  routeVersions             RouteVersion[]
+  routeHoldPlacements       RouteHoldPlacement[]
+  climbObservations         ClimbObservation[]
+  createdAt                 DateTime                  @default(now())
+  updatedAt                 DateTime                  @updatedAt
+}
+
+model Membership {
+  id             String           @id @default(cuid())
+  accountId      String
+  organizationId String
+  role           MembershipRole
+  status         MembershipStatus @default(ACTIVE)
+  displayName    String?
+  jobTitle       String?
+  responsibility String?
+  account        Account          @relation(fields: [accountId], references: [id], onDelete: Restrict)
+  organization   Organization     @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  sessions       AuthSession[]
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+
+  @@unique([accountId, organizationId])
+  @@index([organizationId])
+}
+
+model AuthSession {
+  id            String     @id @default(cuid())
+  accountId     String
+  membershipId  String
+  tokenHash     String     @unique
+  expiresAt     DateTime
+  invalidatedAt DateTime?
+  account       Account    @relation(fields: [accountId], references: [id], onDelete: Restrict)
+  membership    Membership @relation(fields: [membershipId], references: [id], onDelete: Restrict)
+  createdAt     DateTime   @default(now())
+
+  @@index([accountId, expiresAt])
+  @@index([membershipId, expiresAt])
+}
+
+model StaffInvitation {
+  id                  String           @id @default(cuid())
+  organizationId      String
+  email               String
+  role                MembershipRole   @default(L2_ADMIN)
+  status              InvitationStatus @default(PENDING)
+  tokenHash           String           @unique
+  pendingKey          String?          @unique
+  invitedByAccountId  String
+  acceptedByAccountId String?
+  expiresAt           DateTime
+  acceptedAt          DateTime?
+  revokedAt           DateTime?
+  createdAt           DateTime         @default(now())
+  updatedAt           DateTime         @updatedAt
+  organization        Organization     @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  invitedBy           Account          @relation("InvitationSender", fields: [invitedByAccountId], references: [id], onDelete: Restrict)
+  acceptedBy          Account?         @relation("InvitationAcceptor", fields: [acceptedByAccountId], references: [id], onDelete: Restrict)
+
+  @@index([organizationId, createdAt])
+  @@index([email])
+}
+
+model HoldCategory {
+  id                 String             @id @default(cuid())
+  organizationId     String
+  code               String
+  name               String
+  gripType           HoldGripType
+  description        String?
+  source             HoldCategorySource @default(CUSTOM)
+  status             HoldStatus         @default(ACTIVE)
+  createdByAccountId String
+  organization       Organization       @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  createdBy          Account            @relation("HoldCategoryCreator", fields: [createdByAccountId], references: [id], onDelete: Restrict)
+  models             HoldModel[]
+  scans              HoldScan[]
+  createdAt          DateTime           @default(now())
+  updatedAt          DateTime           @updatedAt
+
+  @@unique([organizationId, code])
+  @@unique([organizationId, gripType])
+  @@index([organizationId, status, updatedAt])
+}
+
+model HoldModel {
+  id                 String             @id @default(cuid())
+  organizationId     String
+  categoryId         String
+  code               String
+  name               String
+  brand              String?
+  gripType           HoldGripType
+  style              String?
+  sizeClass          HoldSizeClass
+  widthMm            Int?
+  heightMm           Int?
+  depthMm            Int?
+  mountingType       HoldMountingType   @default(UNKNOWN)
+  description        String?
+  status             HoldStatus         @default(ACTIVE)
+  productKey         String
+  identitySource     HoldIdentitySource @default(MANUAL)
+  scanFingerprint    String?
+  createdByAccountId String
+  organization       Organization       @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  category           HoldCategory       @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  createdBy          Account            @relation("HoldModelCreator", fields: [createdByAccountId], references: [id], onDelete: Restrict)
+  variants           HoldVariant[]
+  createdAt          DateTime           @default(now())
+  updatedAt          DateTime           @updatedAt
+
+  @@unique([organizationId, code])
+  @@unique([categoryId, productKey])
+  @@index([categoryId])
+  @@index([scanFingerprint])
+  @@index([organizationId, status, updatedAt])
+}
+
+model HoldVariant {
+  id                    String                    @id @default(cuid())
+  holdModelId           String
+  colorName             String
+  colorHex              String
+  sku                   String?
+  status                HoldStatus                @default(ACTIVE)
+  colorKey              String
+  activeColorKey        String?
+  deletedAt             DateTime?
+  deletedByAccountId    String?
+  deletionReason        String?
+  deletionSnapshot      Json?
+  holdModel             HoldModel                 @relation(fields: [holdModelId], references: [id], onDelete: Restrict)
+  deletedBy             Account?                  @relation("HoldVariantDeleter", fields: [deletedByAccountId], references: [id], onDelete: Restrict)
+  inventory             HoldInventoryBalance?
+  movements             HoldInventoryMovement[]
+  assets                HoldAsset[]
+  scans                 HoldScan[]
+  initializationEntries HoldInitializationEntry[]
+  routeHoldPlacements   RouteHoldPlacement[]
+  createdAt             DateTime                  @default(now())
+  updatedAt             DateTime                  @updatedAt
+
+  @@unique([holdModelId, activeColorKey])
+  @@index([holdModelId])
+  @@index([holdModelId, status])
+  @@index([holdModelId, deletedAt])
+  @@index([deletedByAccountId])
+}
+
+model HoldInventoryBalance {
+  id                  String                      @id @default(cuid())
+  variantId           String                      @unique
+  warehouseQuantity   Int                         @default(0)
+  installedQuantity   Int                         @default(0)
+  reservedQuantity    Int                         @default(0)
+  maintenanceQuantity Int                         @default(0)
+  verificationStatus  InventoryVerificationStatus @default(UNVERIFIED)
+  version             Int                         @default(0)
+  variant             HoldVariant                 @relation(fields: [variantId], references: [id], onDelete: Restrict)
+  createdAt           DateTime                    @default(now())
+  updatedAt           DateTime                    @updatedAt
+}
+
+model HoldInventoryMovement {
+  id                   String                 @id @default(cuid())
+  organizationId       String
+  variantId            String
+  type                 InventoryMovementType
+  bucket               InventoryBucket
+  quantityDelta        Int
+  beforeQuantity       Int
+  afterQuantity        Int
+  note                 String?
+  referenceType        String?
+  referenceId          String?
+  reversalOfMovementId String?                @unique
+  requestKey           String?
+  requestFingerprint   String?
+  actorAccountId       String
+  organization         Organization           @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  variant              HoldVariant            @relation(fields: [variantId], references: [id], onDelete: Restrict)
+  actor                Account                @relation("HoldMovementActor", fields: [actorAccountId], references: [id], onDelete: Restrict)
+  reversalOf           HoldInventoryMovement? @relation("HoldMovementReversal", fields: [reversalOfMovementId], references: [id], onDelete: Restrict)
+  reversedBy           HoldInventoryMovement? @relation("HoldMovementReversal")
+  occurredAt           DateTime               @default(now())
+
+  @@unique([organizationId, requestKey])
+  @@index([organizationId, occurredAt])
+  @@index([variantId, occurredAt])
+}
+
+model HoldScan {
+  id                    String                   @id @default(cuid())
+  organizationId        String
+  categoryId            String
+  specificationId       String?
+  initializationBatchId String?
+  mode                  HoldScanMode             @default(CREATE_SPECIFICATION)
+  status                HoldScanStatus           @default(DRAFT)
+  note                  String?
+  createdByAccountId    String
+  completedAt           DateTime?
+  organization          Organization             @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  category              HoldCategory             @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  specification         HoldVariant?             @relation(fields: [specificationId], references: [id], onDelete: Restrict)
+  initializationBatch   HoldInitializationBatch? @relation(fields: [initializationBatchId], references: [id], onDelete: Restrict)
+  createdBy             Account                  @relation("HoldScanCreator", fields: [createdByAccountId], references: [id], onDelete: Restrict)
+  assets                HoldAsset[]
+  initializationEntry   HoldInitializationEntry?
+  createdAt             DateTime                 @default(now())
+  updatedAt             DateTime                 @updatedAt
+
+  @@index([organizationId, status, createdAt])
+  @@index([categoryId])
+  @@index([specificationId])
+  @@index([initializationBatchId])
+}
+
+model HoldAsset {
+  id                 String          @id @default(cuid())
+  organizationId     String
+  scanId             String
+  specificationId    String?
+  kind               HoldAssetKind
+  status             HoldAssetStatus @default(READY)
+  objectKey          String          @unique
+  originalFileName   String
+  contentType        String
+  sizeBytes          Int
+  checksumSha256     String
+  metadata           Json?
+  sourceAssetId      String?         @unique
+  createdByAccountId String
+  organization       Organization    @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  scan               HoldScan        @relation(fields: [scanId], references: [id], onDelete: Restrict)
+  specification      HoldVariant?    @relation(fields: [specificationId], references: [id], onDelete: Restrict)
+  sourceAsset        HoldAsset?      @relation("HoldAssetDerivation", fields: [sourceAssetId], references: [id], onDelete: Restrict)
+  derivedAsset       HoldAsset?      @relation("HoldAssetDerivation")
+  createdBy          Account         @relation("HoldAssetCreator", fields: [createdByAccountId], references: [id], onDelete: Restrict)
+  createdAt          DateTime        @default(now())
+
+  @@index([organizationId, createdAt])
+  @@index([scanId, kind])
+  @@index([specificationId, kind])
+}
+
+model HoldInitializationBatch {
+  id                   String                    @id @default(cuid())
+  organizationId       String
+  activeKey            String?                   @unique
+  name                 String
+  status               HoldInitializationStatus  @default(ACTIVE)
+  startedByAccountId   String
+  completedByAccountId String?
+  completedAt          DateTime?
+  organization         Organization              @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  startedBy            Account                   @relation("HoldInitializationStarter", fields: [startedByAccountId], references: [id], onDelete: Restrict)
+  completedBy          Account?                  @relation("HoldInitializationCompleter", fields: [completedByAccountId], references: [id], onDelete: Restrict)
+  scans                HoldScan[]
+  entries              HoldInitializationEntry[]
+  createdAt            DateTime                  @default(now())
+  updatedAt            DateTime                  @updatedAt
+
+  @@index([organizationId, status, createdAt])
+}
+
+model HoldInitializationEntry {
+  id                 String                  @id @default(cuid())
+  batchId            String
+  specificationId    String
+  scanId             String?                 @unique
+  warehouseQuantity  Int
+  installedQuantity  Int
+  note               String?
+  createdByAccountId String
+  batch              HoldInitializationBatch @relation(fields: [batchId], references: [id], onDelete: Restrict)
+  specification      HoldVariant             @relation(fields: [specificationId], references: [id], onDelete: Restrict)
+  scan               HoldScan?               @relation(fields: [scanId], references: [id], onDelete: Restrict)
+  createdBy          Account                 @relation("HoldInitializationEntryCreator", fields: [createdByAccountId], references: [id], onDelete: Restrict)
+  createdAt          DateTime                @default(now())
+
+  @@unique([batchId, specificationId])
+  @@index([specificationId])
+}
+
+model WallArea {
+  id             String                @id @default(cuid())
+  organizationId String
+  code           String
+  name           String
+  floorLabel     String?
+  status         WallStatus            @default(ACTIVE)
+  calibration    WallCalibrationStatus @default(SURVEY_ESTIMATE)
+  organization   Organization          @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  segments       WallSegment[]
+  createdAt      DateTime              @default(now())
+  updatedAt      DateTime              @updatedAt
+
+  @@unique([organizationId, code])
+  @@index([organizationId, status, updatedAt])
+}
+
+model WallSegment {
+  id                       String                @id @default(cuid())
+  organizationId           String
+  areaId                   String
+  code                     String
+  name                     String
+  widthMm                  Int
+  heightMm                 Int
+  surfaceHeightMm          Int?
+  angleFromVerticalDegrees Float?
+  horizontalPitchMm        Int?
+  verticalPitchMm          Int?
+  status                   WallStatus            @default(ACTIVE)
+  calibration              WallCalibrationStatus @default(SURVEY_ESTIMATE)
+  metadata                 Json?
+  organization             Organization          @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  area                     WallArea              @relation(fields: [areaId], references: [id], onDelete: Restrict)
+  holes                    WallHole[]
+  routes                   Route[]
+  climbObservations        ClimbObservation[]
+  createdAt                DateTime              @default(now())
+  updatedAt                DateTime              @updatedAt
+
+  @@unique([organizationId, code])
+  @@index([areaId, status])
+  @@index([organizationId, status, updatedAt])
+}
+
+model WallHole {
+  id             String                @id @default(cuid())
+  organizationId String
+  wallSegmentId  String
+  code           String
+  column         Int
+  row            Int
+  uMm            Int
+  vMm            Int
+  status         WallHoleStatus        @default(AVAILABLE)
+  calibration    WallCalibrationStatus @default(SURVEY_ESTIMATE)
+  organization   Organization          @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  wallSegment    WallSegment           @relation(fields: [wallSegmentId], references: [id], onDelete: Restrict)
+  placements     RouteHoldPlacement[]
+  createdAt      DateTime              @default(now())
+  updatedAt      DateTime              @updatedAt
+
+  @@unique([wallSegmentId, code])
+  @@unique([wallSegmentId, column, row])
+  @@index([organizationId, wallSegmentId])
+}
+
+model Route {
+  id                String             @id @default(cuid())
+  organizationId    String
+  wallSegmentId     String
+  code              String
+  name              String
+  displayColor      String
+  grade             String
+  status            RouteStatus        @default(DRAFT)
+  dataSource        RouteDataSource    @default(MANUAL)
+  organization      Organization       @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  wallSegment       WallSegment        @relation(fields: [wallSegmentId], references: [id], onDelete: Restrict)
+  versions          RouteVersion[]
+  climbObservations ClimbObservation[]
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
+
+  @@unique([organizationId, code])
+  @@index([wallSegmentId, status])
+  @@index([organizationId, status, updatedAt])
+}
+
+model RouteVersion {
+  id                 String               @id @default(cuid())
+  organizationId     String
+  routeId            String
+  versionNumber      Int
+  status             RouteVersionStatus   @default(DRAFT)
+  dataSource         RouteDataSource      @default(MANUAL)
+  note               String?
+  createdByAccountId String
+  organization       Organization         @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  route              Route                @relation(fields: [routeId], references: [id], onDelete: Restrict)
+  createdBy          Account              @relation("RouteVersionCreator", fields: [createdByAccountId], references: [id], onDelete: Restrict)
+  placements         RouteHoldPlacement[]
+  climbObservations  ClimbObservation[]
+  createdAt          DateTime             @default(now())
+  updatedAt          DateTime             @updatedAt
+
+  @@unique([routeId, versionNumber])
+  @@index([organizationId, status, updatedAt])
+}
+
+model RouteHoldPlacement {
+  id              String             @id @default(cuid())
+  organizationId  String
+  routeVersionId  String
+  wallHoleId      String
+  holdVariantId   String?
+  demoAssetKey    String?
+  role            RoutePlacementRole @default(NORMAL)
+  rotationDegrees Int
+  dataSource      RouteDataSource    @default(MANUAL)
+  organization    Organization       @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  routeVersion    RouteVersion       @relation(fields: [routeVersionId], references: [id], onDelete: Restrict)
+  wallHole        WallHole           @relation(fields: [wallHoleId], references: [id], onDelete: Restrict)
+  holdVariant     HoldVariant?       @relation(fields: [holdVariantId], references: [id], onDelete: Restrict)
+  createdAt       DateTime           @default(now())
+  updatedAt       DateTime           @updatedAt
+
+  @@unique([routeVersionId, wallHoleId])
+  @@index([organizationId, routeVersionId])
+  @@index([holdVariantId])
+  @@index([wallHoleId])
+}
+
+model ClimbObservation {
+  id                    String                  @id @default(cuid())
+  organizationId        String
+  wallSegmentId         String
+  routeId               String
+  routeVersionId        String?
+  outcome               ClimbObservationOutcome
+  source                ClimbObservationSource
+  observedAt            DateTime
+  climberKey            String?
+  requestKey            String?
+  correctsObservationId String?
+  createdByAccountId    String?
+  metadata              Json?
+  organization          Organization            @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  wallSegment           WallSegment             @relation(fields: [wallSegmentId], references: [id], onDelete: Restrict)
+  route                 Route                   @relation(fields: [routeId], references: [id], onDelete: Restrict)
+  routeVersion          RouteVersion?           @relation(fields: [routeVersionId], references: [id], onDelete: Restrict)
+  correctsObservation   ClimbObservation?       @relation("ObservationCorrection", fields: [correctsObservationId], references: [id], onDelete: Restrict)
+  correctedBy           ClimbObservation[]      @relation("ObservationCorrection")
+  createdBy             Account?                @relation("ClimbObservationCreator", fields: [createdByAccountId], references: [id], onDelete: Restrict)
+  createdAt             DateTime                @default(now())
+
+  @@unique([organizationId, requestKey])
+  @@index([organizationId, observedAt])
+  @@index([wallSegmentId, observedAt])
+  @@index([routeId, observedAt])
+}
+
+model AuditEvent {
+  id             String   @id @default(cuid())
+  organizationId String?
+  actorAccountId String?
+  type           String
+  outcome        String
+  metadata       Json?
+  occurredAt     DateTime @default(now())
+
+  @@index([organizationId, occurredAt])
+}
+
+model RateLimitRecord {
+  id         String   @id @default(cuid())
+  scope      String
+  subjectKey String
+  count      Int      @default(0)
+  windowEnds DateTime
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@unique([scope, subjectKey])
+  @@index([windowEnds])
+}

@@ -1,0 +1,32 @@
+{
+  "name": "climbing-crm-poc",
+  "private": true,
+  "version": "0.1.0",
+  "packageManager": "pnpm@11.9.0",
+  "engines": {
+    "node": ">=22.23.1 <23"
+  },
+  "scripts": {
+    "dev": "turbo dev",
+    "build": "turbo build",
+    "lint": "eslint .",
+    "typecheck": "turbo typecheck",
+    "test": "turbo test",
+    "format": "prettier --check .",
+    "format:write": "prettier --write .",
+    "services:up": "docker compose --env-file .env -f infra/compose.yaml up -d",
+    "services:down": "docker compose --env-file .env -f infra/compose.yaml down",
+    "services:status": "docker compose --env-file .env -f infra/compose.yaml ps",
+    "db:migrate": "pnpm --filter @climbing-crm/api prisma migrate dev",
+    "db:generate": "pnpm --filter @climbing-crm/api prisma generate"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.32.0",
+    "@next/eslint-plugin-next": "15.5.21",
+    "eslint": "^9.32.0",
+    "prettier": "^3.6.2",
+    "turbo": "^2.5.0",
+    "typescript": "^5.8.3",
+    "typescript-eslint": "^8.39.1"
+  }
+}

@@ -1,0 +1,27 @@
+{
+  "name": "@climbing-crm/web",
+  "private": true,
+  "version": "0.1.0",
+  "scripts": {
+    "dev": "NEXT_DIST_DIR=.next-dev next dev --port 3100",
+    "build": "NEXT_DIST_DIR=.next-build next build",
+    "start": "NEXT_DIST_DIR=.next-build next start --port 3100",
+    "lint": "tsc --noEmit",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run --passWithNoTests"
+  },
+  "dependencies": {
+    "@google/model-viewer": "^4.3.1",
+    "next": "^15.5.0",
+    "react": "^19.1.0",
+    "react-dom": "^19.1.0",
+    "three": "0.183.2"
+  },
+  "devDependencies": {
+    "@types/node": "^22.15.3",
+    "@types/react": "^19.1.2",
+    "@types/react-dom": "^19.1.2",
+    "@types/three": "0.183.1",
+    "vitest": "^3.2.4"
+  }
+}

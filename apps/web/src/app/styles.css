@@ -1,0 +1,290 @@
+:root {
+  color: #1d2622;
+  background: #f6f7f3;
+  font-family:
+    -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', 'PingFang SC', 'Microsoft YaHei',
+    sans-serif;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+}
+* {
+  box-sizing: border-box;
+}
+body {
+  margin: 0;
+  min-width: 320px;
+}
+button,
+input,
+select,
+textarea {
+  font: inherit;
+}
+.auth-page {
+  min-height: 100vh;
+  display: grid;
+  grid-template-columns: minmax(300px, 0.95fr) minmax(420px, 1.05fr);
+}
+.intro-panel {
+  padding: clamp(40px, 8vw, 128px);
+  background: #203c33;
+  color: #f6f7f3;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+.brand-mark {
+  width: 48px;
+  height: 48px;
+  display: grid;
+  place-items: center;
+  border-radius: 14px;
+  background: #d9fa74;
+  color: #17342b;
+  font-size: 28px;
+  font-weight: 700;
+  margin-bottom: 64px;
+}
+.eyebrow {
+  margin: 0 0 12px;
+  color: #7b9260;
+  letter-spacing: 0.14em;
+  font-size: 11px;
+  font-weight: 700;
+}
+.intro-panel h2 {
+  margin: 0;
+  font-size: clamp(32px, 4vw, 56px);
+  line-height: 1.11;
+  letter-spacing: -0.055em;
+}
+.intro-panel > p:not(.eyebrow) {
+  max-width: 430px;
+  color: #b9c7c0;
+  line-height: 1.7;
+  margin: 24px 0 0;
+}
+.feature-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 40px;
+}
+.feature-list span {
+  color: #d9e3dc;
+  border: 1px solid #4c645a;
+  border-radius: 999px;
+  padding: 8px 12px;
+  font-size: 12px;
+}
+.form-panel {
+  display: grid;
+  place-items: center;
+  padding: 36px;
+}
+.auth-card {
+  width: min(100%, 400px);
+  padding: 18px;
+}
+.auth-header h1,
+.success-card h1 {
+  margin: 0;
+  font-size: 32px;
+  letter-spacing: -0.045em;
+}
+.auth-header > p:last-child,
+.success-card > p {
+  color: #68746e;
+  line-height: 1.65;
+  margin: 14px 0 0;
+}
+.auth-form {
+  display: grid;
+  gap: 18px;
+  margin-top: 36px;
+}
+label {
+  display: grid;
+  gap: 8px;
+  color: #45514b;
+  font-size: 13px;
+  font-weight: 650;
+}
+input,
+select,
+textarea {
+  width: 100%;
+  border: 1px solid #d9ded9;
+  border-radius: 10px;
+  background: #fff;
+  color: #1d2622;
+  outline: none;
+  padding: 13px 14px;
+  transition:
+    border-color 0.15s,
+    box-shadow 0.15s;
+}
+textarea {
+  min-height: 88px;
+  resize: vertical;
+}
+input::placeholder {
+  color: #a0aaa4;
+}
+input:focus {
+  border-color: #59765f;
+  box-shadow: 0 0 0 3px rgb(89 118 95 / 12%);
+}
+.primary-button {
+  border: 0;
+  border-radius: 10px;
+  min-height: 48px;
+  background: #203c33;
+  color: #fff;
+  cursor: pointer;
+  font-weight: 700;
+  transition:
+    background 0.15s,
+    transform 0.15s;
+}
+.primary-button:hover:not(:disabled) {
+  background: #2f5447;
+  transform: translateY(-1px);
+}
+.primary-button:disabled {
+  opacity: 0.62;
+  cursor: wait;
+}
+.form-message {
+  margin: -4px 0 0;
+  color: #b34235;
+  font-size: 13px;
+  line-height: 1.5;
+}
+.mode-switch {
+  margin: 28px 0 0;
+  text-align: center;
+  color: #68746e;
+  font-size: 14px;
+}
+.mode-switch button {
+  padding: 0;
+  border: 0;
+  color: #285d47;
+  background: transparent;
+  cursor: pointer;
+  font-weight: 700;
+}
+.success-card {
+  padding-top: 48px;
+  text-align: center;
+}
+.success-mark {
+  width: 42px;
+  height: 42px;
+  margin: 0 auto 24px !important;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: #e4f4bb;
+  color: #326140 !important;
+  font-size: 22px;
+  font-weight: 700;
+}
+.success-card .muted {
+  margin-top: 28px;
+  font-size: 13px;
+}
+@media (max-width: 760px) {
+  .auth-page {
+    grid-template-columns: 1fr;
+  }
+  .intro-panel {
+    min-height: 370px;
+    padding: 48px 32px;
+  }
+  .brand-mark {
+    margin-bottom: 34px;
+  }
+  .form-panel {
+    min-height: 540px;
+    padding: 28px 24px;
+  }
+  .auth-card {
+    padding: 12px 0;
+  }
+}
+
+.invite-page {
+  min-height: 100vh;
+  display: grid;
+  grid-template-columns: minmax(360px, 0.9fr) minmax(420px, 1.1fr);
+  background: #f6f7f3;
+}
+.invite-brand-panel {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding: clamp(48px, 8vw, 120px);
+  color: #f6f7f3;
+  background: #203c33;
+}
+.invite-brand-panel h1 {
+  margin: 0;
+  font-size: clamp(34px, 4vw, 54px);
+  line-height: 1.13;
+  letter-spacing: -0.05em;
+}
+.invite-brand-panel > p:last-child {
+  max-width: 420px;
+  margin: 24px 0 0;
+  color: #b9c7c0;
+  line-height: 1.7;
+}
+.invite-form-panel {
+  display: grid;
+  place-items: center;
+  padding: 36px;
+}
+.invite-card {
+  width: min(100%, 430px);
+}
+.invite-card h2 {
+  margin: 0;
+  font-size: 32px;
+  letter-spacing: -0.045em;
+}
+.invite-target,
+.invite-help {
+  color: #68746e;
+  font-size: 13px;
+  line-height: 1.6;
+}
+.invite-target {
+  margin: 12px 0 0;
+}
+.invite-help {
+  margin: -4px 0 0;
+}
+.invitation-unavailable {
+  margin: 32px 0 0;
+  padding: 18px;
+  border-radius: 12px;
+  color: #705e38;
+  background: #f4eddd;
+  font-size: 14px;
+  line-height: 1.6;
+}
+@media (max-width: 760px) {
+  .invite-page {
+    grid-template-columns: 1fr;
+  }
+  .invite-brand-panel {
+    min-height: 330px;
+    padding: 46px 30px;
+  }
+  .invite-form-panel {
+    min-height: 520px;
+    padding: 36px 24px;
+  }
+}

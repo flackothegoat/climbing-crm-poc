@@ -1,0 +1,50 @@
+node_modules/
+.pnpm-store/
+.next/
+.next-dev/
+.next-build/
+.next-*/
+dist/
+.dist-dev/
+.dist-*/
+coverage/
+test-results/
+playwright-report/
+.turbo/
+*.tsbuildinfo
+.cache/
+
+# Local environment and deployment secrets
+.env
+.env.*
+!.env.example
+!.env.production.example
+.deploy/
+
+# Private keys and certificates
+.ssh/
+*.pem
+*.key
+*.p12
+*.pfx
+id_rsa*
+id_ed25519*
+
+# Local database dumps and bind-mounted service data
+*.dump
+*.sql
+*.sql.gz
+!apps/api/prisma/migrations/**/migration.sql
+backup/
+backups/
+.docker-data/
+postgres-data/
+redis-data/
+minio-data/
+
+# Temporary and operating-system files
+tmp/
+temp/
+*.tmp
+*.log
+.DS_Store
