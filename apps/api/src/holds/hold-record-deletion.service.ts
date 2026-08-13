@@ -3,9 +3,12 @@ import {
   HoldAssetStatus,
   HoldScanStatus,
   HoldStatus,
+  HoldInstallationStatus,
+  HoldObservationMatchStatus,
   InventoryBucket,
   InventoryMovementType,
   Prisma,
+  RouteVersionStatus,
 } from '@prisma/client';
 import type { CurrentSession } from '../auth/session.service';
 import { PrismaService } from '../database/prisma.service';
@@ -19,6 +22,32 @@ const bucketFields = [
   [InventoryBucket.RESERVED, 'reservedQuantity'],
   [InventoryBucket.MAINTENANCE, 'maintenanceQuantity'],
 ] as const;
+
+const deletionRecordInclude = {
+  inventory: true,
+  assets: {
+    select: {
+      id: true,
+      kind: true,
+      status: true,
+      originalFileName: true,
+      sizeBytes: true,
+      checksumSha256: true,
+    },
+  },
+  holdModel: { include: { category: { select: { id: true, name: true } } } },
+  _count: {
+    select: {
+      routeHoldPlacements: {
+        where: { routeVersion: { status: { not: RouteVersionStatus.RETIRED } } },
+      },
+      installations: { where: { status: HoldInstallationStatus.INSTALLED } },
+      observedWallHolds: {
+        where: { matchStatus: HoldObservationMatchStatus.CONFIRMED },
+      },
+    },
+  },
+} satisfies Prisma.HoldVariantInclude;
 
 @Injectable()
 export class HoldRecordDeletionService {
@@ -36,6 +65,7 @@ export class HoldRecordDeletionService {
     await this.prisma.$transaction(async (transaction) => {
       await lockHoldOrganization(transaction, session.organization.id);
       const record = await this.findRecord(session.organization.id, specificationId, transaction);
+      assertRecordIsUnused(record);
       const inventory = requireInventory(record);
       if (inventory.version !== input.expectedVersion) {
         throw new ConflictException('库存刚刚发生变化，请刷新后重新确认删除');
@@ -113,20 +143,7 @@ export class HoldRecordDeletionService {
   ) {
     const record = await client.holdVariant.findFirst({
       where: { id: specificationId, deletedAt: null, holdModel: { organizationId } },
-      include: {
-        inventory: true,
-        assets: {
-          select: {
-            id: true,
-            kind: true,
-            status: true,
-            originalFileName: true,
-            sizeBytes: true,
-            checksumSha256: true,
-          },
-        },
-        holdModel: { include: { category: { select: { id: true, name: true } } } },
-      },
+      include: deletionRecordInclude,
     });
     if (!record) throw new NotFoundException('岩点档案不存在或已经删除');
     return record;
@@ -134,20 +151,7 @@ export class HoldRecordDeletionService {
 }
 
 type DeletionRecord = Prisma.HoldVariantGetPayload<{
-  include: {
-    inventory: true;
-    assets: {
-      select: {
-        id: true;
-        kind: true;
-        status: true;
-        originalFileName: true;
-        sizeBytes: true;
-        checksumSha256: true;
-      };
-    };
-    holdModel: { include: { category: { select: { id: true; name: true } } } };
-  };
+  include: typeof deletionRecordInclude;
 }>;
 
 type DeletionClient = Pick<PrismaService, 'holdVariant'> | Prisma.TransactionClient;
@@ -183,6 +187,18 @@ function buildDeletionPlan(
 function requireInventory(record: DeletionRecord): NonNullable<DeletionRecord['inventory']> {
   if (!record.inventory) throw new NotFoundException('岩点库存不存在');
   return record.inventory;
+}
+
+function assertRecordIsUnused(record: DeletionRecord): void {
+  if (record._count.installations > 0) {
+    throw new ConflictException('岩点仍有有效安装记录，请先完成拆除和库存回库');
+  }
+  if (record._count.routeHoldPlacements > 0) {
+    throw new ConflictException('岩点仍被草稿或已发布线路引用，只能停用，不能永久删除');
+  }
+  if (record._count.observedWallHolds > 0) {
+    throw new ConflictException('岩点已有已确认的墙面识别记录，只能停用，不能永久删除');
+  }
 }
 
 function buildDeletionMovements(

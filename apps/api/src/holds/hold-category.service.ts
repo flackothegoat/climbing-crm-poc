@@ -228,7 +228,14 @@ export class HoldCategoryService {
               include: {
                 inventory: true,
                 assets: { orderBy: { createdAt: 'asc' } },
-                _count: { select: { movements: true } },
+                _count: {
+                  select: {
+                    movements: true,
+                    routeHoldPlacements: true,
+                    installations: true,
+                    observedWallHolds: true,
+                  },
+                },
               },
             },
           },
@@ -344,7 +351,14 @@ type CategoryWithUsage = Prisma.HoldCategoryGetPayload<{
           include: {
             inventory: true;
             assets: true;
-            _count: { select: { movements: true } };
+            _count: {
+              select: {
+                movements: true;
+                routeHoldPlacements: true;
+                installations: true;
+                observedWallHolds: true;
+              };
+            };
           };
         };
       };
@@ -360,12 +374,15 @@ type CategoryClient = Pick<PrismaService, 'holdCategory'> | Prisma.TransactionCl
 
 function toCategoryDetail(category: CategoryWithUsage, movements: MovementWithDetails[]) {
   const summary = toCategorySummary(category);
+  const variants = new Map(
+    category.models.flatMap((model) => model.variants.map((variant) => [variant.id, variant])),
+  );
   return {
     ...summary,
     lifecycle: categoryLifecycle(category),
     specifications: summary.specifications.map((item) => ({
       ...item,
-      lifecycle: specificationLifecycle(item),
+      lifecycle: specificationLifecycle(item, variants.get(item.id)),
     })),
     movements: movements.map(toMovement),
   };
@@ -379,12 +396,21 @@ function categoryLifecycle(category: CategoryWithUsage) {
   };
 }
 
-function specificationLifecycle(specification: {
-  status: HoldStatus;
-  inventory: { totalQuantity: number };
-}) {
+function specificationLifecycle(
+  specification: {
+    status: HoldStatus;
+    inventory: { totalQuantity: number };
+  },
+  usage?: CategoryWithUsage['models'][number]['variants'][number],
+) {
   return {
-    canDelete: true,
+    canDelete:
+      specification.inventory.totalQuantity === 0 &&
+      usage !== undefined &&
+      usage._count.movements === 0 &&
+      usage._count.routeHoldPlacements === 0 &&
+      usage._count.installations === 0 &&
+      usage._count.observedWallHolds === 0,
     canStop:
       specification.status === HoldStatus.ACTIVE && specification.inventory.totalQuantity === 0,
     canRestore: specification.status === HoldStatus.ARCHIVED,
@@ -398,7 +424,12 @@ function canDeleteCategory(category: CategoryWithUsage): boolean {
       (model) =>
         model._count.variants === model.variants.length &&
         model.variants.every(
-          (variant) => inventoryTotal(variant.inventory) === 0 && variant._count.movements === 0,
+          (variant) =>
+            inventoryTotal(variant.inventory) === 0 &&
+            variant._count.movements === 0 &&
+            variant._count.routeHoldPlacements === 0 &&
+            variant._count.installations === 0 &&
+            variant._count.observedWallHolds === 0,
         ),
     )
   );

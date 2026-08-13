@@ -122,7 +122,7 @@ curl https://galsync-climbing-demo-01.southeastasia.cloudapp.azure.com/backend/h
 首页应返回 HTTP `200`，健康接口应返回：
 
 ```json
-{"status":"ok","service":"climbing-crm-api"}
+{ "status": "ok", "service": "climbing-crm-api" }
 ```
 
 ### 6. 完成后关闭临时 SSH
@@ -185,7 +185,7 @@ curl https://galsync-climbing-demo-01.southeastasia.cloudapp.azure.com/backend/h
 健康接口的正常结果为：
 
 ```json
-{"status":"ok","service":"climbing-crm-api"}
+{ "status": "ok", "service": "climbing-crm-api" }
 ```
 
 ## 更新

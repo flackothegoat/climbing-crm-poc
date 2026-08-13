@@ -26,16 +26,14 @@ interface MovementCommand {
 
 export interface HoldInventoryTransferInput {
   variantId: string;
-  from: PlacementBucket;
-  to: PlacementBucket;
+  from: InventoryBucket;
+  to: InventoryBucket;
   quantity: number;
   requestKey: string;
-  referenceType: 'WALL_PLACEMENT' | 'ROUTE_ASSIGNMENT';
+  referenceType: 'WALL_PLACEMENT' | 'ROUTE_ASSIGNMENT' | 'HOLD_INSTALLATION';
   referenceId: string;
   note?: string;
 }
-
-type PlacementBucket = Extract<InventoryBucket, 'WAREHOUSE' | 'INSTALLED'>;
 
 const quantityFieldByBucket: Record<InventoryBucket, QuantityField> = {
   [InventoryBucket.WAREHOUSE]: 'warehouseQuantity',
@@ -127,22 +125,29 @@ export class HoldInventoryService {
     assertTransferInput(input);
     return this.prisma.$transaction(async (transaction) => {
       await lockHoldOrganization(transaction, session.organization.id);
-      const fingerprint = transferFingerprint(input);
-      const replay = await this.findReplay(
-        transaction,
-        session,
-        input.variantId,
-        input.requestKey,
-        fingerprint,
-      );
-      if (replay) return replay;
-      const variant = await findActiveVariant(
-        transaction,
-        session.organization.id,
-        input.variantId,
-      );
-      return applyTransfer(transaction, this.audit, session, variant, input, fingerprint);
+      return this.transferInTransaction(transaction, session, input);
     });
+  }
+
+  /** Compose installation state and inventory movements inside one caller-owned transaction. */
+  async transferInTransaction(
+    transaction: Prisma.TransactionClient,
+    session: CurrentSession,
+    input: HoldInventoryTransferInput,
+  ) {
+    this.access.assert(session, Capability.HOLD_WRITE);
+    assertTransferInput(input);
+    const fingerprint = transferFingerprint(input);
+    const replay = await this.findReplay(
+      transaction,
+      session,
+      input.variantId,
+      input.requestKey,
+      fingerprint,
+    );
+    if (replay) return replay;
+    const variant = await findActiveVariant(transaction, session.organization.id, input.variantId);
+    return applyTransfer(transaction, this.audit, session, variant, input, fingerprint);
   }
 
   private async findReplay(
@@ -362,10 +367,7 @@ async function applyTransfer(
     [sourceField]: sourceAfter,
     [targetField]: targetAfter,
   });
-  const type =
-    input.to === InventoryBucket.INSTALLED
-      ? InventoryMovementType.INSTALL
-      : InventoryMovementType.REMOVE;
+  const type = transferMovementType(input.from, input.to);
   await transaction.holdInventoryMovement.createMany({
     data: transferMovementData(
       session,
@@ -383,6 +385,16 @@ async function applyTransfer(
     where: { id: variant.inventory.id },
   });
   return inventoryValues(updated);
+}
+
+function transferMovementType(from: InventoryBucket, to: InventoryBucket): InventoryMovementType {
+  if (to === InventoryBucket.INSTALLED) return InventoryMovementType.INSTALL;
+  if (from === InventoryBucket.INSTALLED) return InventoryMovementType.REMOVE;
+  if (to === InventoryBucket.MAINTENANCE) return InventoryMovementType.MAINTENANCE_IN;
+  if (from === InventoryBucket.MAINTENANCE) return InventoryMovementType.MAINTENANCE_OUT;
+  if (to === InventoryBucket.RESERVED) return InventoryMovementType.RESERVE;
+  if (from === InventoryBucket.RESERVED) return InventoryMovementType.RELEASE;
+  return InventoryMovementType.ADJUSTMENT;
 }
 
 function transferMovementData(

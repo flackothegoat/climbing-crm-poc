@@ -1,4 +1,4 @@
-import { BadRequestException } from '@nestjs/common';
+import { parseWithSchema } from '../common/zod-validation';
 import {
   HoldGripType,
   HoldAssetKind,
@@ -187,8 +187,4 @@ export const parseAssetKind = (input: unknown) => parse(uploadAssetKindSchema, i
 export const parsePreviewGenerationVersion = (input: unknown) =>
   parse(previewGenerationVersionSchema, input);
 
-function parse<T>(schema: z.ZodType<T>, input: unknown): T {
-  const result = schema.safeParse(input);
-  if (result.success) return result.data;
-  throw new BadRequestException(result.error.issues[0]?.message ?? '请求参数不符合要求');
-}
+const parse = parseWithSchema;

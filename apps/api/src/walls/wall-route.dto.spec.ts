@@ -6,6 +6,8 @@ describe('墙面线路 DTO', () => {
     expect(() =>
       parseSaveRouteSettingPlan({
         schemaVersion: 1,
+        settingJobId: 'job-1',
+        revision: 0,
         wall: { code: 'W06' },
         routes: [{ id: 'route-green', name: '青苔', color: 'green', grade: 'V2' }],
         placements: [
@@ -33,5 +35,19 @@ describe('墙面线路 DTO', () => {
     });
     expect(parsed.wallCode).toBe('W06');
     expect(parsed.outcome).toBe('COMPLETED');
+  });
+
+  it('拒绝保存没有任何岩点的空线路', () => {
+    expect(() =>
+      parseSaveRouteSettingPlan({
+        schemaVersion: 1,
+        settingJobId: 'job-1',
+        revision: 0,
+        wall: { code: 'W06' },
+        routes: [{ id: 'route-empty', name: '空线路', color: '#00aa88', grade: 'V2' }],
+        placements: [],
+        updatedAt: '2026-08-06T10:00:00+08:00',
+      }),
+    ).toThrow('线路至少需要一个岩点位置');
   });
 });

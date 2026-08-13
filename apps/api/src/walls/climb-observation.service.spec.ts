@@ -35,12 +35,24 @@ describe('ClimbObservationService 租户与幂等', () => {
       route: { code: 'route-green' },
       outcome: 'COMPLETED',
       source: 'MANUAL',
+      routeVersionId: 'version-1',
       observedAt: new Date(input.observedAt),
       climberKey: null,
     };
     const transaction = {
       $executeRaw: vi.fn().mockResolvedValue(1),
-      route: { findFirst: vi.fn().mockResolvedValue({ id: 'route-1', wallSegmentId: 'wall-1' }) },
+      route: {
+        findUnique: vi.fn().mockResolvedValue({
+          id: 'route-1',
+          versions: [
+            {
+              id: 'version-1',
+              status: 'PUBLISHED',
+              wallSegments: [{ wallSegmentId: 'wall-1' }],
+            },
+          ],
+        }),
+      },
       climbObservation: {
         findUnique: vi.fn().mockResolvedValue(null),
         create: vi.fn().mockResolvedValue(created),
@@ -57,13 +69,11 @@ describe('ClimbObservationService 租户与幂等', () => {
       routeId: 'route-green',
       source: 'MANUAL',
     });
-    expect(transaction.route.findFirst).toHaveBeenCalledWith({
-      where: {
-        organizationId: 'org-1',
-        code: 'route-green',
-        wallSegment: { code: 'W06', organizationId: 'org-1' },
-      },
-    });
+    expect(transaction.route.findUnique).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { organizationId_code: { organizationId: 'org-1', code: 'route-green' } },
+      }),
+    );
     expect(transaction.climbObservation.create).toHaveBeenCalledWith(
       expect.objectContaining({
         data: expect.objectContaining({ organizationId: 'org-1', createdByAccountId: 'owner-1' }),
@@ -79,6 +89,8 @@ describe('ClimbObservationService 租户与幂等', () => {
           id: 'observation-1',
           route: { code: 'route-green' },
           wallSegment: { code: 'W06' },
+          routeVersion: { id: 'version-1' },
+          routeVersionId: 'version-1',
           outcome: 'FAILED',
           source: 'MANUAL',
           observedAt: new Date(input.observedAt),

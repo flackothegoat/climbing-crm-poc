@@ -8,6 +8,8 @@
     "lint": "tsc --noEmit",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
+    "test:integration": "DATABASE_INTEGRATION=true vitest run src/database/database-hardening.integration.spec.ts",
+    "db:check": "ts-node scripts/check-database-invariants.ts",
     "prisma": "prisma"
   },
   "dependencies": {

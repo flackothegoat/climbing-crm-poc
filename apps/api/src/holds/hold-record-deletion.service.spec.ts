@@ -28,6 +28,7 @@ const record = {
   deletionSnapshot: null,
   createdAt: new Date(),
   updatedAt: new Date(),
+  _count: { routeHoldPlacements: 0, installations: 0, observedWallHolds: 0 },
   inventory: {
     id: 'balance-1',
     variantId: 'variant-1',

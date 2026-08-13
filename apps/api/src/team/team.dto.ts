@@ -1,6 +1,6 @@
-import { BadRequestException } from '@nestjs/common';
 import { MembershipStatus } from '@prisma/client';
 import { z } from 'zod';
+import { parseWithSchema } from '../common/zod-validation';
 import { AUTH_POLICY } from '../auth/auth.constants';
 
 const email = z.string().trim().toLowerCase().email('请输入有效邮箱').max(254);
@@ -34,8 +34,4 @@ export const parseAcceptInvitation = (input: unknown) => parse(acceptInvitationS
 export const parseUpdateMember = (input: unknown) => parse(updateMemberSchema, input);
 export const parseInvitationToken = (input: unknown) => parse(tokenSchema, input);
 
-function parse<T>(schema: z.ZodType<T>, input: unknown): T {
-  const result = schema.safeParse(input);
-  if (result.success) return result.data;
-  throw new BadRequestException(result.error.issues[0]?.message ?? '请求参数不符合要求');
-}
+const parse = parseWithSchema;

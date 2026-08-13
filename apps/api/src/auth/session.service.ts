@@ -24,17 +24,18 @@ export class SessionService {
         tokenHash: this.tokens.hash(rawToken),
         invalidatedAt: null,
         expiresAt: { gt: new Date() },
-        account: { status: 'ACTIVE' },
-        membership: { status: 'ACTIVE' },
+        membership: { status: 'ACTIVE', account: { status: 'ACTIVE' } },
       },
       include: {
-        account: true,
-        membership: { include: { organization: true } },
+        membership: { include: { account: true, organization: true } },
       },
     });
     if (!session) throw new UnauthorizedException('登录状态已失效，请重新登录');
     return {
-      account: { id: session.account.id, email: session.account.email },
+      account: {
+        id: session.membership.account.id,
+        email: session.membership.account.email,
+      },
       membership: { id: session.membership.id, displayName: session.membership.displayName },
       organization: {
         id: session.membership.organization.id,

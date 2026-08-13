@@ -8,6 +8,7 @@ import { isPrismaError } from '../database/prisma-errors';
 import { PrismaService } from '../database/prisma.service';
 import { AccessControlService, Capability } from '../security/access-control.service';
 import { ObjectStorageService } from '../storage/object-storage.service';
+import { ObjectCleanupService } from '../storage/object-cleanup.service';
 import { validateHoldAsset } from './hold-asset-file';
 
 @Injectable()
@@ -17,6 +18,7 @@ export class HoldAssetService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly storage: ObjectStorageService,
+    private readonly cleanup: ObjectCleanupService,
     private readonly access: AccessControlService,
   ) {}
 
@@ -192,7 +194,8 @@ export class HoldAssetService {
     try {
       await this.storage.remove(objectKey);
     } catch (error) {
-      this.logger.warn(`对象文件清理失败: ${objectKey}`, error);
+      this.logger.warn(`对象文件清理失败，已进入重试队列: ${objectKey}`, error);
+      await this.cleanup.enqueue(objectKey, 'hold-asset-compensation', error);
     }
   }
 }

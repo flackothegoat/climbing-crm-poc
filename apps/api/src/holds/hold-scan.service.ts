@@ -34,20 +34,28 @@ export class HoldScanService {
 
   async create(session: CurrentSession, input: CreateScanInput) {
     this.access.assert(session, Capability.HOLD_WRITE);
-    const context = await this.resolveCreateContext(session.organization.id, input);
-    const scan = await this.prisma.holdScan.create({
-      data: {
-        organizationId: session.organization.id,
-        categoryId: context.categoryId,
-        specificationId: context.specificationId,
-        initializationBatchId: input.initializationBatchId,
-        mode: input.mode,
-        createdByAccountId: session.account.id,
-      },
-      include: { assets: true },
+    return this.prisma.$transaction(async (transaction) => {
+      const context = await this.resolveCreateContext(session.organization.id, input, transaction);
+      const scan = await transaction.holdScan.create({
+        data: {
+          organizationId: session.organization.id,
+          categoryId: context.categoryId,
+          specificationId: context.specificationId,
+          initializationBatchId: input.initializationBatchId,
+          mode: input.mode,
+          createdByAccountId: session.account.id,
+        },
+        include: { assets: true },
+      });
+      await this.recordAudit(
+        session,
+        scan.id,
+        'hold.capture.created',
+        { mode: input.mode },
+        transaction,
+      );
+      return toScan(scan);
     });
-    await this.recordAudit(session, scan.id, 'hold.capture.created', { mode: input.mode });
-    return toScan(scan);
   }
 
   async finalize(session: CurrentSession, scanId: string, input: FinalizeScanInput) {
@@ -133,19 +141,27 @@ export class HoldScanService {
     await this.assets.removeObjectsQuietly(assets);
   }
 
-  private async resolveCreateContext(organizationId: string, input: CreateScanInput) {
+  private async resolveCreateContext(
+    organizationId: string,
+    input: CreateScanInput,
+    client: Prisma.TransactionClient = this.prisma,
+  ) {
     if (input.mode === HoldScanMode.ENRICH_SPECIFICATION) {
-      return this.findAttachmentTarget(organizationId, input.specificationId!);
+      return this.findAttachmentTarget(organizationId, input.specificationId!, client);
     }
-    await this.assertActiveCategory(organizationId, input.categoryId!);
+    await this.assertActiveCategory(organizationId, input.categoryId!, client);
     if (input.initializationBatchId) {
-      await this.assertActiveBatch(organizationId, input.initializationBatchId);
+      await this.assertActiveBatch(organizationId, input.initializationBatchId, client);
     }
     return { categoryId: input.categoryId!, specificationId: undefined };
   }
 
-  private async findAttachmentTarget(organizationId: string, specificationId: string) {
-    const target = await this.prisma.holdVariant.findFirst({
+  private async findAttachmentTarget(
+    organizationId: string,
+    specificationId: string,
+    client: Prisma.TransactionClient = this.prisma,
+  ) {
+    const target = await client.holdVariant.findFirst({
       where: {
         id: specificationId,
         status: HoldStatus.ACTIVE,
@@ -163,16 +179,24 @@ export class HoldScanService {
     return { categoryId: target.holdModel.categoryId, specificationId: target.id };
   }
 
-  private async assertActiveCategory(organizationId: string, categoryId: string): Promise<void> {
-    const category = await this.prisma.holdCategory.findFirst({
+  private async assertActiveCategory(
+    organizationId: string,
+    categoryId: string,
+    client: Prisma.TransactionClient = this.prisma,
+  ): Promise<void> {
+    const category = await client.holdCategory.findFirst({
       where: { id: categoryId, organizationId, status: HoldStatus.ACTIVE },
       select: { id: true },
     });
     if (!category) throw new NotFoundException('可用岩点用途分类不存在');
   }
 
-  private async assertActiveBatch(organizationId: string, batchId: string): Promise<void> {
-    const batch = await this.prisma.holdInitializationBatch.findFirst({
+  private async assertActiveBatch(
+    organizationId: string,
+    batchId: string,
+    client: Prisma.TransactionClient = this.prisma,
+  ): Promise<void> {
+    const batch = await client.holdInitializationBatch.findFirst({
       where: { id: batchId, organizationId, status: HoldInitializationStatus.ACTIVE },
       select: { id: true },
     });

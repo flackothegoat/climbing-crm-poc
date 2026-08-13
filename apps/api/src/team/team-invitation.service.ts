@@ -6,14 +6,16 @@ import {
   UnauthorizedException,
 } from '@nestjs/common';
 import { InvitationStatus, MembershipRole } from '@prisma/client';
-import type { Account, Organization, StaffInvitation } from '@prisma/client';
+import type { Account, Organization, Prisma, StaffInvitation } from '@prisma/client';
 import bcrypt from 'bcryptjs';
 import type { CurrentSession } from '../auth/session.service';
 import type { SessionResult } from '../auth/auth.service';
 import { AuditService } from '../common/audit.service';
-import { readEnvironment } from '../config/environment';
+import { AppConfigService } from '../config/app-config.service';
 import { PrismaService } from '../database/prisma.service';
+import { isPrismaError } from '../database/prisma-errors';
 import { TokenService } from '../security/token.service';
+import { RateLimitService } from '../security/rate-limit.service';
 import { AUTH_POLICY } from '../auth/auth.constants';
 import type { AcceptInvitationInput, CreateInvitationInput } from './team.dto';
 import { AccessControlService, Capability } from '../security/access-control.service';
@@ -27,6 +29,8 @@ export class TeamInvitationService {
     private readonly tokens: TokenService,
     private readonly audit: AuditService,
     private readonly access: AccessControlService,
+    private readonly config: AppConfigService,
+    private readonly rateLimit: RateLimitService,
   ) {}
 
   async list(session: CurrentSession) {
@@ -40,20 +44,33 @@ export class TeamInvitationService {
 
   async create(session: CurrentSession, input: CreateInvitationInput) {
     this.access.assert(session, Capability.TEAM_MANAGE);
-    await this.assertCanInvite(session.organization.id, input.email);
     const token = this.tokens.createRawToken();
-    const invitation = await this.prisma.staffInvitation.create({
-      data: {
-        organizationId: session.organization.id,
-        email: input.email,
-        tokenHash: this.tokens.hash(token),
-        pendingKey: pendingKey(session.organization.id, input.email),
-        invitedByAccountId: session.account.id,
-        expiresAt: invitationExpiry(),
-      },
-    });
-    await this.record(session, invitation.id, 'team.invitation.created');
-    return { ...this.toSummary(invitation), activationUrl: activationUrl(token) };
+    try {
+      const invitation = await this.prisma.$transaction(async (transaction) => {
+        await this.assertCanInvite(session.organization.id, input.email, transaction);
+        const created = await transaction.staffInvitation.create({
+          data: {
+            organizationId: session.organization.id,
+            email: input.email,
+            tokenHash: this.tokens.hash(token),
+            pendingKey: pendingKey(session.organization.id, input.email),
+            invitedByAccountId: session.account.id,
+            expiresAt: invitationExpiry(this.config.values.INVITATION_TTL_HOURS),
+          },
+        });
+        await this.record(session, created.id, 'team.invitation.created', transaction);
+        return created;
+      });
+      return {
+        ...this.toSummary(invitation),
+        activationUrl: activationUrl(this.config.values.WEB_ORIGIN, token),
+      };
+    } catch (error) {
+      if (isPrismaError(error, 'P2002')) {
+        throw new ConflictException('该邮箱已有待接受邀请');
+      }
+      throw error;
+    }
   }
 
   async resend(session: CurrentSession, invitationId: string) {
@@ -63,29 +80,37 @@ export class TeamInvitationService {
       throw new ConflictException('只有待接受的邀请可以重新发送');
     }
     const token = this.tokens.createRawToken();
-    const invitation = await this.prisma.staffInvitation.update({
-      where: { id: current.id },
-      data: {
-        tokenHash: this.tokens.hash(token),
-        expiresAt: invitationExpiry(),
-      },
+    const invitation = await this.prisma.$transaction(async (transaction) => {
+      const updated = await transaction.staffInvitation.update({
+        where: { id: current.id },
+        data: {
+          tokenHash: this.tokens.hash(token),
+          expiresAt: invitationExpiry(this.config.values.INVITATION_TTL_HOURS),
+        },
+      });
+      await this.record(session, updated.id, 'team.invitation.resent', transaction);
+      return updated;
     });
-    await this.record(session, invitation.id, 'team.invitation.resent');
-    return { ...this.toSummary(invitation), activationUrl: activationUrl(token) };
+    return {
+      ...this.toSummary(invitation),
+      activationUrl: activationUrl(this.config.values.WEB_ORIGIN, token),
+    };
   }
 
   async revoke(session: CurrentSession, invitationId: string): Promise<void> {
     this.access.assert(session, Capability.TEAM_MANAGE);
-    const result = await this.prisma.staffInvitation.updateMany({
-      where: {
-        id: invitationId,
-        organizationId: session.organization.id,
-        status: InvitationStatus.PENDING,
-      },
-      data: { status: InvitationStatus.REVOKED, pendingKey: null, revokedAt: new Date() },
+    await this.prisma.$transaction(async (transaction) => {
+      const result = await transaction.staffInvitation.updateMany({
+        where: {
+          id: invitationId,
+          organizationId: session.organization.id,
+          status: InvitationStatus.PENDING,
+        },
+        data: { status: InvitationStatus.REVOKED, pendingKey: null, revokedAt: new Date() },
+      });
+      if (!result.count) throw new NotFoundException('未找到可撤销的邀请');
+      await this.record(session, invitationId, 'team.invitation.revoked', transaction);
     });
-    if (!result.count) throw new NotFoundException('未找到可撤销的邀请');
-    await this.record(session, invitationId, 'team.invitation.revoked');
   }
 
   async inspect(rawToken: string) {
@@ -98,15 +123,36 @@ export class TeamInvitationService {
     };
   }
 
-  async accept(rawToken: string, input: AcceptInvitationInput): Promise<SessionResult> {
+  async accept(
+    rawToken: string,
+    input: AcceptInvitationInput,
+    clientIp = 'unknown',
+  ): Promise<SessionResult> {
+    const policy = AUTH_POLICY.invitationRateLimit;
+    await Promise.all([
+      this.rateLimit.consume('invitation:token', rawToken, policy.attempts, policy.windowMinutes),
+      this.rateLimit.consume(
+        'invitation:ip',
+        clientIp,
+        AUTH_POLICY.invitationIpRateLimit.attempts,
+        AUTH_POLICY.invitationIpRateLimit.windowMinutes,
+      ),
+    ]);
     const invitation = await this.findByToken(rawToken);
     this.assertAcceptable(invitation);
     const existing = await this.prisma.account.findUnique({ where: { email: invitation.email } });
     await this.assertAccountCanAccept(existing, input.password, invitation.organizationId);
     const passwordHash = existing ? existing.passwordHash : await hashPassword(input.password);
-    const session = createSession(this.tokens);
-    const result = await this.persistAcceptance(invitation, existing, passwordHash, input, session);
-    await this.recordAcceptance(invitation, result);
+    const session = createSession(this.tokens, this.config.values.SESSION_TTL_HOURS);
+    try {
+      await this.persistAcceptance(invitation, existing, passwordHash, input, session);
+    } catch (error) {
+      if (isPrismaError(error, 'P2002')) {
+        throw new ConflictException('账号或成员关系刚刚发生变化，请重新打开邀请链接');
+      }
+      throw error;
+    }
+    await this.rateLimit.reset('invitation:token', rawToken);
     return {
       ...session,
       organization: { id: invitation.organization.id, name: invitation.organization.name },
@@ -149,35 +195,45 @@ export class TeamInvitationService {
       });
       await transaction.authSession.create({
         data: {
-          accountId: account.id,
           membershipId: membership.id,
           tokenHash: this.tokens.hash(session.token),
           expiresAt: session.expiresAt,
         },
       });
-      return { accountId: account.id, membershipId: membership.id };
+      const result = { accountId: account.id, membershipId: membership.id };
+      await this.recordAcceptance(invitation, result, transaction);
+      return result;
     });
   }
 
   private recordAcceptance(
     invitation: InvitationWithOrganization,
     result: { accountId: string; membershipId: string },
+    client?: Prisma.TransactionClient,
   ): Promise<unknown> {
-    return this.audit.record({
-      organizationId: invitation.organizationId,
-      actorAccountId: result.accountId,
-      type: 'team.invitation.accepted',
-      outcome: 'SUCCESS',
-      metadata: { invitationId: invitation.id, membershipId: result.membershipId },
-    });
+    return this.audit.record(
+      {
+        organizationId: invitation.organizationId,
+        actorAccountId: result.accountId,
+        type: 'team.invitation.accepted',
+        outcome: 'SUCCESS',
+        metadata: { invitationId: invitation.id, membershipId: result.membershipId },
+      },
+      client,
+    );
   }
 
-  private async assertCanInvite(organizationId: string, email: string): Promise<void> {
-    const membership = await this.prisma.membership.findFirst({
+  private async assertCanInvite(
+    organizationId: string,
+    email: string,
+    client: Pick<PrismaService, 'membership' | 'staffInvitation'> | Prisma.TransactionClient = this
+      .prisma,
+  ): Promise<void> {
+    const membership = await client.membership.findFirst({
       where: { organizationId, account: { email } },
     });
     if (membership) throw new ConflictException('该邮箱已经是当前岩馆员工');
-    const pending = await this.prisma.staffInvitation.findUnique({
+    const pending = await client.staffInvitation.findUnique({
       where: { pendingKey: pendingKey(organizationId, email) },
     });
     if (pending) throw new ConflictException('该邮箱已有待接受邀请');
@@ -238,14 +294,22 @@ export class TeamInvitationService {
     };
   }
 
-  private record(session: CurrentSession, invitationId: string, type: string): Promise<unknown> {
-    return this.audit.record({
-      organizationId: session.organization.id,
-      actorAccountId: session.account.id,
-      type,
-      outcome: 'SUCCESS',
-      metadata: { invitationId },
-    });
+  private record(
+    session: CurrentSession,
+    invitationId: string,
+    type: string,
+    client?: Prisma.TransactionClient,
+  ): Promise<unknown> {
+    return this.audit.record(
+      {
+        organizationId: session.organization.id,
+        actorAccountId: session.account.id,
+        type,
+        outcome: 'SUCCESS',
+        metadata: { invitationId },
+      },
+      client,
+    );
   }
 }
 
@@ -253,8 +317,8 @@ function pendingKey(organizationId: string, email: string): string {
   return `${organizationId}:${email}`;
 }
 
-function invitationExpiry(): Date {
-  return new Date(Date.now() + readEnvironment().INVITATION_TTL_HOURS * 60 * 60_000);
+function invitationExpiry(ttlHours: number): Date {
+  return new Date(Date.now() + ttlHours * 60 * 60_000);
 }
 
 function invitationStatus(invitation: { status: InvitationStatus; expiresAt: Date }): string {
@@ -264,12 +328,15 @@ function invitationStatus(invitation: { status: InvitationStatus; expiresAt: Dat
   return invitation.status;
 }
 
-function activationUrl(token: string): string {
-  return `${readEnvironment().WEB_ORIGIN}/invite/${encodeURIComponent(token)}`;
+function activationUrl(webOrigin: string, token: string): string {
+  return `${webOrigin}/invite/${encodeURIComponent(token)}`;
 }
 
-function createSession(tokens: TokenService): Pick<SessionResult, 'token' | 'expiresAt'> {
-  const expiresAt = new Date(Date.now() + readEnvironment().SESSION_TTL_HOURS * 60 * 60_000);
+function createSession(
+  tokens: TokenService,
+  ttlHours: number,
+): Pick<SessionResult, 'token' | 'expiresAt'> {
+  const expiresAt = new Date(Date.now() + ttlHours * 60 * 60_000);
   return { token: tokens.createRawToken(), expiresAt };
 }
 

@@ -1,16 +1,23 @@
 import type {
   ClimbingRoute,
   HoldAssetDefinition,
-  HoldColor,
   RoutePlacement,
   RouteSettingPlan,
 } from './route-setting.types';
 import { W06_CALIBRATION, W06_WALL, w06HoleId } from '../walls/w06-wall-data';
 
-export const HOLD_ASSETS: Record<HoldColor, HoldAssetDefinition> = {
+export const HOLD_ASSETS: Record<string, HoldAssetDefinition> = {
   green: {
     assetId: 'test-green',
-    color: 'green',
+    colorHex: '#22a868',
+    colorName: '绿色',
+    draggable: true,
+    disabledReason: null,
+    warehouseQuantity: 99,
+    reservedQuantity: 0,
+    installedQuantity: 0,
+    inventoryVersion: 0,
+    previewUrl: '/walls/w06/qa/green-clean-top.png',
     collisionRadiusMm: 91.04,
     dimensionsMm: { width: 100.67, height: 132.36, depth: 57.87 },
     label: '绿色测试岩点',
@@ -23,7 +30,15 @@ export const HOLD_ASSETS: Record<HoldColor, HoldAssetDefinition> = {
   },
   red: {
     assetId: 'test-red',
-    color: 'red',
+    colorHex: '#ef4050',
+    colorName: '红色',
+    draggable: true,
+    disabledReason: null,
+    warehouseQuantity: 99,
+    reservedQuantity: 0,
+    installedQuantity: 0,
+    inventoryVersion: 0,
+    previewUrl: '/walls/w06/qa/red-clean-top.png',
     collisionRadiusMm: 95.79,
     dimensionsMm: { width: 166.02, height: 104.76, depth: 71.68 },
     label: '红色测试岩点',
@@ -36,7 +51,15 @@ export const HOLD_ASSETS: Record<HoldColor, HoldAssetDefinition> = {
   },
   yellow: {
     assetId: 'test-yellow',
-    color: 'yellow',
+    colorHex: '#f0b415',
+    colorName: '黄色',
+    draggable: true,
+    disabledReason: null,
+    warehouseQuantity: 99,
+    reservedQuantity: 0,
+    installedQuantity: 0,
+    inventoryVersion: 0,
+    previewUrl: '/walls/w06/qa/yellow-clean-top.png',
     collisionRadiusMm: 91.48,
     dimensionsMm: { width: 145.16, height: 118.44, depth: 49.09 },
     label: '黄色测试岩点',
@@ -55,7 +78,7 @@ const routes: ClimbingRoute[] = [
   { id: 'route-yellow', name: '暖光', color: 'yellow', grade: 'V3' },
 ];
 
-const placementSeeds: Array<[HoldColor, number, number, number]> = [
+const placementSeeds: Array<[string, number, number, number]> = [
   ['green', 5, 1, -12],
   ['green', 7, 4, 18],
   ['green', 6, 7, -25],
@@ -82,10 +105,27 @@ const placementSeeds: Array<[HoldColor, number, number, number]> = [
 export function createSeedRouteSettingPlan(now = new Date().toISOString()): RouteSettingPlan {
   return {
     schemaVersion: 1,
+    settingJobId: 'demo-job',
+    settingJob: { id: 'demo-job', name: 'Demo', status: 'DRAFT' },
+    revision: 0,
     wall: W06_WALL,
     calibration: W06_CALIBRATION,
     routes,
     placements: placementSeeds.map(createSeedPlacement),
+    updatedAt: now,
+  };
+}
+
+export function createEmptyRouteSettingPlan(now = new Date().toISOString()): RouteSettingPlan {
+  return {
+    schemaVersion: 1,
+    settingJobId: '',
+    settingJob: null,
+    revision: 0,
+    wall: W06_WALL,
+    calibration: W06_CALIBRATION,
+    routes: [],
+    placements: [],
     updatedAt: now,
   };
 }

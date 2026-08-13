@@ -1,6 +1,6 @@
-import { BadRequestException } from '@nestjs/common';
 import { ClimbObservationOutcome, RoutePlacementRole } from '@prisma/client';
 import { z } from 'zod';
+import { parseWithSchema } from '../common/zod-validation';
 
 const code = z
   .string()
@@ -30,14 +30,18 @@ const placementSchema = z.object({
 const saveRouteSettingPlanSchema = z
   .object({
     schemaVersion: z.literal(1),
+    settingJobId: z.string().trim().min(1).max(128),
+    revision: z.number().int().nonnegative(),
     wall: z.object({ code: wallCode }).passthrough(),
-    routes: z.array(routeSchema).min(1).max(64),
+    routes: z.array(routeSchema).max(64),
     placements: z.array(placementSchema).max(2_000),
     updatedAt: isoDateTime,
   })
   .superRefine((plan, context) => {
     const routeIds = new Set(plan.routes.map((route) => route.id));
+    const referencedRouteIds = new Set(plan.placements.map((placement) => placement.routeId));
     const placementIds = new Set<string>();
+    const holeIds = new Set<string>();
     for (const placement of plan.placements) {
       if (!routeIds.has(placement.routeId)) {
         context.addIssue({ code: 'custom', message: '岩点位置引用了不存在的线路' });
@@ -46,6 +50,15 @@ const saveRouteSettingPlanSchema = z
         context.addIssue({ code: 'custom', message: '岩点位置编号不能重复' });
       }
       placementIds.add(placement.id);
+      if (holeIds.has(placement.holeId)) {
+        context.addIssue({ code: 'custom', message: '一个墙孔不能同时安装多个岩点' });
+      }
+      holeIds.add(placement.holeId);
+    }
+    for (const route of plan.routes) {
+      if (!referencedRouteIds.has(route.id)) {
+        context.addIssue({ code: 'custom', message: '线路至少需要一个岩点位置' });
+      }
     }
   });
 
@@ -55,6 +68,8 @@ const listObservationsSchema = z
     routeId: code.optional(),
     from: isoDateTime.optional(),
     to: isoDateTime.optional(),
+    cursor: z.string().trim().min(1).max(128).optional(),
+    limit: z.coerce.number().int().min(1).max(200).default(100),
   })
   .refine((value) => !value.from || !value.to || value.from < value.to, '开始时间必须早于结束时间');
 
@@ -77,8 +92,4 @@ export const parseSaveRouteSettingPlan = (input: unknown) =>
 export const parseListObservations = (input: unknown) => parse(listObservationsSchema, input);
 export const parseCreateObservation = (input: unknown) => parse(createObservationSchema, input);
 
-function parse<T>(schema: z.ZodType<T>, input: unknown): T {
-  const result = schema.safeParse(input);
-  if (result.success) return result.data;
-  throw new BadRequestException(result.error.issues[0]?.message ?? '请求参数不符合要求');
-}
+const parse = parseWithSchema;

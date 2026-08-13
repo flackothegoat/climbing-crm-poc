@@ -5,6 +5,7 @@ import type { CurrentSession } from '../auth/session.service';
 import type { PrismaService } from '../database/prisma.service';
 import { AccessControlService } from '../security/access-control.service';
 import type { ObjectStorageService } from '../storage/object-storage.service';
+import type { ObjectCleanupService } from '../storage/object-cleanup.service';
 import { HoldAssetService } from './hold-asset.service';
 
 const session: CurrentSession = {
@@ -67,9 +68,13 @@ function createSubject(derivedAsset: Record<string, unknown> | null = null) {
     remove: vi.fn().mockResolvedValue(undefined),
   };
   const prisma = { holdAsset } as unknown as PrismaService;
+  const cleanup = {
+    enqueue: vi.fn().mockResolvedValue(undefined),
+  } as unknown as ObjectCleanupService;
   const service = new HoldAssetService(
     prisma,
     storage as unknown as ObjectStorageService,
+    cleanup,
     new AccessControlService(),
   );
   return { holdAsset, service, storage };

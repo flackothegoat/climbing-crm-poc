@@ -3,7 +3,6 @@ import {
   Controller,
   Get,
   HttpCode,
-  Param,
   Post,
   Req,
   Res,
@@ -11,12 +10,10 @@ import {
 } from '@nestjs/common';
 import { ApiBody, ApiOperation, ApiTags } from '@nestjs/swagger';
 import type { FastifyReply, FastifyRequest } from 'fastify';
-import { readEnvironment } from '../config/environment';
+import { AppConfigService } from '../config/app-config.service';
 import { parseLoginInput, parseRegisterInput } from './auth.dto';
 import { AuthService, type SessionResult } from './auth.service';
 import { SessionService } from './session.service';
-import { parseAcceptInvitation, parseInvitationToken } from '../team/team.dto';
-import { TeamInvitationService } from '../team/team-invitation.service';
 
 interface CookieRequest extends FastifyRequest {
   cookies: Record<string, string | undefined>;
@@ -28,7 +25,7 @@ export class AuthController {
   constructor(
     private readonly auth: AuthService,
     private readonly sessions: SessionService,
-    private readonly invitations: TeamInvitationService,
+    private readonly config: AppConfigService,
   ) {}
 
   @Post('register')
@@ -42,16 +39,27 @@ export class AuthController {
       },
     },
   })
-  async register(@Body() body: unknown, @Res({ passthrough: true }) reply: FastifyReply) {
-    return this.respondWithSession(await this.auth.register(parseRegisterInput(body)), reply);
+  async register(
+    @Body() body: unknown,
+    @Req() request: FastifyRequest,
+    @Res({ passthrough: true }) reply: FastifyReply,
+  ) {
+    return this.respondWithSession(
+      await this.auth.register(parseRegisterInput(body), request.ip),
+      reply,
+    );
   }
 
   @Post('login')
   @HttpCode(200)
   @ApiOperation({ summary: '使用邮箱和密码登录' })
   @ApiBody({ schema: { example: { email: 'owner@example.com', password: 'a-secure-password' } } })
-  async login(@Body() body: unknown, @Res({ passthrough: true }) reply: FastifyReply) {
-    return this.respondWithSession(await this.auth.login(parseLoginInput(body)), reply);
+  async login(
+    @Body() body: unknown,
+    @Req() request: FastifyRequest,
+    @Res({ passthrough: true }) reply: FastifyReply,
+  ) {
+    return this.respondWithSession(await this.auth.login(parseLoginInput(body), request.ip), reply);
   }
 
   @Get('session')
@@ -74,34 +82,13 @@ export class AuthController {
     @Req() request: CookieRequest,
     @Res({ passthrough: true }) reply: FastifyReply,
   ): Promise<void> {
-    const environment = readEnvironment();
+    const environment = this.config.values;
     await this.sessions.invalidate(this.readSessionToken(request));
     reply.clearCookie(environment.SESSION_COOKIE_NAME, { path: '/' });
   }
 
-  @Get('invitations/:token')
-  @ApiOperation({ summary: '查看员工邀请信息' })
-  inspectInvitation(@Param('token') token: string) {
-    return this.invitations.inspect(parseInvitationToken(token));
-  }
-
-  @Post('invitations/:token/accept')
-  @HttpCode(200)
-  @ApiOperation({ summary: '接受员工邀请并登录' })
-  async acceptInvitation(
-    @Param('token') token: string,
-    @Body() body: unknown,
-    @Res({ passthrough: true }) reply: FastifyReply,
-  ) {
-    const result = await this.invitations.accept(
-      parseInvitationToken(token),
-      parseAcceptInvitation(body),
-    );
-    return this.respondWithSession(result, reply);
-  }
-
-  private respondWithSession(result: SessionResult, reply: FastifyReply) {
-    const env = readEnvironment();
+  respondWithSession(result: SessionResult, reply: FastifyReply) {
+    const env = this.config.values;
     reply.setCookie(env.SESSION_COOKIE_NAME, result.token, {
       httpOnly: true,
       sameSite: 'lax',
@@ -117,7 +104,7 @@ export class AuthController {
   }
 
   private readSessionToken(request: CookieRequest): string {
-    const token = request.cookies[readEnvironment().SESSION_COOKIE_NAME];
+    const token = request.cookies[this.config.values.SESSION_COOKIE_NAME];
     if (!token) throw new UnauthorizedException('请先登录');
     return token;
   }

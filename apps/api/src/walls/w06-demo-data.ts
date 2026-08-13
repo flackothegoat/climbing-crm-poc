@@ -101,10 +101,13 @@ const observationSeeds = [
   ...monthlyRouteSeeds('route-yellow', [61, 68, 77, 83, 92, 101], [37, 43, 49, 55, 64, 72], 31),
 ];
 
-export function createDummyObservations(routeIdsByCode: Map<string, string>) {
+export function createDummyObservations(
+  routeIdsByCode: Map<string, { routeId: string; routeVersionId: string }>,
+) {
   return observationSeeds.flatMap((seed) =>
     Array.from({ length: seed.attempts }, (_, index) => ({
-      routeId: routeIdsByCode.get(seed.routeCode)!,
+      routeId: routeIdsByCode.get(seed.routeCode)!.routeId,
+      routeVersionId: routeIdsByCode.get(seed.routeCode)!.routeVersionId,
       outcome: (index < seed.completed ? 'COMPLETED' : 'FAILED') as ClimbObservationOutcome,
       source: 'DUMMY' as const,
       observedAt: new Date(

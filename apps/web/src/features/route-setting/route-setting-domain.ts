@@ -1,6 +1,5 @@
 import { W06_HOLES } from '../walls/w06-wall-data';
 import type { WallHole } from '../walls/wall.types';
-import { HOLD_ASSETS } from './route-setting-demo-data';
 import type {
   HoldAssetDefinition,
   PlacementCollision,
@@ -73,13 +72,16 @@ export function addPlacement(
   });
 }
 
-export function findPlacementCollisions(plan: RouteSettingPlan): PlacementCollision[] {
+export function findPlacementCollisions(
+  plan: RouteSettingPlan,
+  assets: HoldAssetDefinition[],
+): PlacementCollision[] {
   const collisions: PlacementCollision[] = [];
   for (let firstIndex = 0; firstIndex < plan.placements.length; firstIndex += 1) {
     for (let secondIndex = firstIndex + 1; secondIndex < plan.placements.length; secondIndex += 1) {
       const first = plan.placements[firstIndex];
       const second = plan.placements[secondIndex];
-      if (placementsCollide(first, second)) {
+      if (placementsCollide(first, second, assets)) {
         collisions.push({ firstPlacementId: first.id, secondPlacementId: second.id });
       }
     }
@@ -87,8 +89,11 @@ export function findPlacementCollisions(plan: RouteSettingPlan): PlacementCollis
   return collisions;
 }
 
-export function matchPlacementMount(placement: RoutePlacement): PlacementMountMatch {
-  const asset = assetById(placement.assetId);
+export function matchPlacementMount(
+  placement: RoutePlacement,
+  assets: HoldAssetDefinition[],
+): PlacementMountMatch {
+  const asset = assetById(placement.assetId, assets);
   const primaryHole = findWallHole(placement.holeId);
   if (!asset || !primaryHole) return { matchedHoles: [], valid: false };
   const radians = (placement.rotationDegrees * Math.PI) / 180;
@@ -113,15 +118,21 @@ export function matchPlacementMount(placement: RoutePlacement): PlacementMountMa
   };
 }
 
-export function placementHasMountConflict(plan: RouteSettingPlan, placementId: string): boolean {
+export function placementHasMountConflict(
+  plan: RouteSettingPlan,
+  placementId: string,
+  assets: HoldAssetDefinition[],
+): boolean {
   const placement = plan.placements.find((item) => item.id === placementId);
   if (!placement) return true;
-  const mount = matchPlacementMount(placement);
+  const mount = matchPlacementMount(placement, assets);
   if (!mount.valid) return true;
   const occupiedByOthers = new Set(
     plan.placements
       .filter((item) => item.id !== placementId)
-      .flatMap((item) => matchPlacementMount(item).matchedHoles.map((match) => match.holeId)),
+      .flatMap((item) =>
+        matchPlacementMount(item, assets).matchedHoles.map((match) => match.holeId),
+      ),
   );
   return mount.matchedHoles.some((match) => occupiedByOthers.has(match.holeId));
 }
@@ -130,7 +141,7 @@ export function exportRouteSettingPlanJson(plan: RouteSettingPlan): string {
   return `${JSON.stringify(plan, null, 2)}\n`;
 }
 
-export function exportPlacementCsv(plan: RouteSettingPlan): string {
+export function exportPlacementCsv(plan: RouteSettingPlan, assets: HoldAssetDefinition[]): string {
   const header = [
     '墙段',
     '线路',
@@ -145,7 +156,7 @@ export function exportPlacementCsv(plan: RouteSettingPlan): string {
     'Z_mm',
     '旋转_deg',
   ];
-  const rows = plan.placements.map((placement) => placementCsvRow(plan, placement));
+  const rows = plan.placements.map((placement) => placementCsvRow(plan, placement, assets));
   return [header, ...rows].map((row) => row.map(csvCell).join(',')).join('\n');
 }
 
@@ -159,11 +170,15 @@ export function downloadTextFile(filename: string, content: string, type: string
   window.setTimeout(() => URL.revokeObjectURL(link.href), 1000);
 }
 
-function placementsCollide(first: RoutePlacement, second: RoutePlacement): boolean {
+function placementsCollide(
+  first: RoutePlacement,
+  second: RoutePlacement,
+  assets: HoldAssetDefinition[],
+): boolean {
   const firstHole = findWallHole(first.holeId);
   const secondHole = findWallHole(second.holeId);
-  const firstAsset = assetById(first.assetId);
-  const secondAsset = assetById(second.assetId);
+  const firstAsset = assetById(first.assetId, assets);
+  const secondAsset = assetById(second.assetId, assets);
   if (!firstHole || !secondHole || !firstAsset || !secondAsset) return false;
   const minimumDistance =
     firstAsset.collisionRadiusMm + secondAsset.collisionRadiusMm + collisionSafetyGapMm;
@@ -173,15 +188,16 @@ function placementsCollide(first: RoutePlacement, second: RoutePlacement): boole
 function placementCsvRow(
   plan: RouteSettingPlan,
   placement: RoutePlacement,
+  assets: HoldAssetDefinition[],
 ): Array<string | number> {
   const hole = findWallHole(placement.holeId);
   const route = plan.routes.find((item) => item.id === placement.routeId);
-  const asset = assetById(placement.assetId);
-  const mount = matchPlacementMount(placement);
+  const asset = assetById(placement.assetId, assets);
+  const mount = matchPlacementMount(placement, assets);
   return [
     plan.wall.code,
     route?.name ?? placement.routeId,
-    asset?.color ?? '',
+    asset?.colorName ?? '',
     placement.holeId,
     mount.matchedHoles.map((item) => item.holeId).join('|'),
     asset?.mountPattern.type ?? '',
@@ -196,8 +212,11 @@ function placementCsvRow(
 
 const mountSnapToleranceMm = 18;
 
-function assetById(assetId: string): HoldAssetDefinition | undefined {
-  return Object.values(HOLD_ASSETS).find((asset) => asset.assetId === assetId);
+function assetById(
+  assetId: string,
+  assets: HoldAssetDefinition[],
+): HoldAssetDefinition | undefined {
+  return assets.find((asset) => asset.assetId === assetId);
 }
 
 function squaredDistance(

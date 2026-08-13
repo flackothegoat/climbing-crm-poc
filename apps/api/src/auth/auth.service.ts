@@ -1,9 +1,10 @@
-import { ConflictException, Injectable, UnauthorizedException } from '@nestjs/common';
+import { ConflictException, Injectable, Logger, UnauthorizedException } from '@nestjs/common';
 import { MembershipRole } from '@prisma/client';
 import bcrypt from 'bcryptjs';
 import { AuditService } from '../common/audit.service';
-import { readEnvironment } from '../config/environment';
+import { AppConfigService } from '../config/app-config.service';
 import { PrismaService } from '../database/prisma.service';
+import { isPrismaError } from '../database/prisma-errors';
 import { RateLimitService } from '../security/rate-limit.service';
 import { TokenService } from '../security/token.service';
 import { AUTH_POLICY } from './auth.constants';
@@ -18,30 +19,43 @@ export interface SessionResult {
 
 @Injectable()
 export class AuthService {
+  private readonly logger = new Logger(AuthService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly tokens: TokenService,
     private readonly rateLimit: RateLimitService,
     private readonly audit: AuditService,
+    private readonly config: AppConfigService,
   ) {}
 
-  async register(input: RegisterInput): Promise<SessionResult> {
-    await this.rateLimit.assertAllowed('register', input.email, ...rateLimitArgs('register'));
-    const existing = await this.prisma.account.findUnique({ where: { email: input.email } });
-    if (existing) throw new ConflictException('该邮箱已注册，请直接登录');
+  async register(input: RegisterInput, clientIp = 'unknown'): Promise<SessionResult> {
+    await Promise.all([
+      this.rateLimit.consume('register:email', input.email, ...rateLimitArgs('register')),
+      this.rateLimit.consume('register:ip', clientIp, ...rateLimitArgs('register')),
+    ]);
     const session = this.createSession();
-    const result = await this.createL1Admin(input, session);
-    await this.audit.record({
-      organizationId: result.organization.id,
-      actorAccountId: result.accountId,
-      type: 'auth.register',
-      outcome: 'SUCCESS',
-    });
-    return { ...session, organization: result.organization, role: MembershipRole.L1_ADMIN };
+    try {
+      const result = await this.createL1Admin(input, session);
+      return { ...session, organization: result.organization, role: MembershipRole.L1_ADMIN };
+    } catch (error) {
+      if (isPrismaError(error, 'P2002')) {
+        throw new ConflictException('该邮箱已注册，请直接登录');
+      }
+      throw error;
+    }
   }
 
-  async login(input: LoginInput): Promise<SessionResult> {
-    await this.rateLimit.assertAllowed('login', input.email, ...rateLimitArgs('login'));
+  async login(input: LoginInput, clientIp = 'unknown'): Promise<SessionResult> {
+    await Promise.all([
+      this.rateLimit.consume('login:email', input.email, ...rateLimitArgs('login')),
+      this.rateLimit.consume(
+        'login:ip',
+        clientIp,
+        AUTH_POLICY.loginIpRateLimit.attempts,
+        AUTH_POLICY.loginIpRateLimit.windowMinutes,
+      ),
+    ]);
     const account = await this.prisma.account.findUnique({
       where: { email: input.email },
       include: {
@@ -58,31 +72,31 @@ export class AuthService {
       account.status !== 'ACTIVE' ||
       !(await bcrypt.compare(input.password, account.passwordHash))
     ) {
-      await this.audit.record({
-        actorAccountId: account?.id,
-        type: 'auth.login',
-        outcome: 'FAILURE',
-        metadata: { emailHash: this.tokens.hash(input.email) },
-      });
+      await this.recordFailedLogin(account?.id, input.email);
       throw new UnauthorizedException('邮箱或密码不正确');
     }
     const membership = account.memberships[0];
     if (!membership) throw new UnauthorizedException('账号未关联可用岩馆');
     const session = this.createSession();
-    await this.prisma.authSession.create({
-      data: {
-        accountId: account.id,
-        membershipId: membership.id,
-        tokenHash: this.tokens.hash(session.token),
-        expiresAt: session.expiresAt,
-      },
+    await this.prisma.$transaction(async (transaction) => {
+      await transaction.authSession.create({
+        data: {
+          membershipId: membership.id,
+          tokenHash: this.tokens.hash(session.token),
+          expiresAt: session.expiresAt,
+        },
+      });
+      await this.audit.record(
+        {
+          organizationId: membership.organizationId,
+          actorAccountId: account.id,
+          type: 'auth.login',
+          outcome: 'SUCCESS',
+        },
+        transaction,
+      );
     });
-    await this.audit.record({
-      organizationId: membership.organizationId,
-      actorAccountId: account.id,
-      type: 'auth.login',
-      outcome: 'SUCCESS',
-    });
+    await this.rateLimit.reset('login:email', input.email);
     return {
       ...session,
       organization: toOrganization(membership.organization),
@@ -90,8 +104,21 @@ export class AuthService {
     };
   }
 
+  private async recordFailedLogin(accountId: string | undefined, email: string): Promise<void> {
+    try {
+      await this.audit.record({
+        actorAccountId: accountId,
+        type: 'auth.login',
+        outcome: 'FAILURE',
+        metadata: { emailHash: this.tokens.hash(email) },
+      });
+    } catch (error) {
+      this.logger.warn('登录失败审计记录未能写入', error);
+    }
+  }
+
   private createSession(): Pick<SessionResult, 'token' | 'expiresAt'> {
-    const expiresAt = new Date(Date.now() + readEnvironment().SESSION_TTL_HOURS * 60 * 60_000);
+    const expiresAt = new Date(Date.now() + this.config.values.SESSION_TTL_HOURS * 60 * 60_000);
     return { token: this.tokens.createRawToken(), expiresAt };
   }
 
@@ -116,12 +143,20 @@ export class AuthService {
       });
       await transaction.authSession.create({
         data: {
-          accountId: account.id,
           membershipId: membership.id,
           tokenHash: this.tokens.hash(session.token),
           expiresAt: session.expiresAt,
         },
       });
+      await this.audit.record(
+        {
+          organizationId: organization.id,
+          actorAccountId: account.id,
+          type: 'auth.register',
+          outcome: 'SUCCESS',
+        },
+        transaction,
+      );
       return { accountId: account.id, organization: toOrganization(organization) };
     });
   }

@@ -45,16 +45,16 @@
 
 ## A/B 环境
 
-| 项目 | Southeast Asia | East Asia |
-| --- | --- | --- |
-| VM | `vm-climbing-demo-01` | `vm-climbing-demo-ea-01` |
-| SKU | `Standard_D2s_v4` | `Standard_D2s_v4` |
-| CPU / 内存 | 2 vCPU / 8 GiB | 2 vCPU / 8 GiB |
-| 系统 | Ubuntu Server 24.04 LTS | Ubuntu Server 24.04 LTS |
-| 系统盘 | 128 GiB Standard SSD | 128 GiB Standard SSD |
-| 安全 | Trusted Launch、Secure Boot、vTPM | Trusted Launch、Secure Boot、vTPM |
-| 公网入站 | 80、443 | 80、443 |
-| 应用版本 | 优化版 | 同一优化版 |
+| 项目       | Southeast Asia                    | East Asia                         |
+| ---------- | --------------------------------- | --------------------------------- |
+| VM         | `vm-climbing-demo-01`             | `vm-climbing-demo-ea-01`          |
+| SKU        | `Standard_D2s_v4`                 | `Standard_D2s_v4`                 |
+| CPU / 内存 | 2 vCPU / 8 GiB                    | 2 vCPU / 8 GiB                    |
+| 系统       | Ubuntu Server 24.04 LTS           | Ubuntu Server 24.04 LTS           |
+| 系统盘     | 128 GiB Standard SSD              | 128 GiB Standard SSD              |
+| 安全       | Trusted Launch、Secure Boot、vTPM | Trusted Launch、Secure Boot、vTPM |
+| 公网入站   | 80、443                           | 80、443                           |
+| 应用版本   | 优化版                            | 同一优化版                        |
 
 East Asia 测试域名：`galsync-climbing-demo-ea-01.eastasia.cloudapp.azure.com`。
 
@@ -72,15 +72,15 @@ East Asia 测试域名：`galsync-climbing-demo-ea-01.eastasia.cloudapp.azure.co
 
 ## 测试结果
 
-| 指标（中位数） | Southeast Asia | East Asia | East Asia 相对结果 |
-| --- | ---: | ---: | ---: |
-| 首页 TLS 建连 | 0.461 s | 0.539 s | 慢 16.9% |
-| 首页首字节 | 0.611 s | 0.728 s | 慢 19.1% |
-| 首页总时长 | 0.626 s | 0.752 s | 慢 20.1% |
-| API 总时长 | 0.610 s | 0.712 s | 慢 16.7% |
-| 连接复用后首页 | 0.159 s | 0.185 s | 慢 16.4% |
-| 27 MB 模型首字节 | 0.650 s | 0.724 s | 慢 11.4% |
-| 27 MB 模型完整下载 | 2.608 s | 2.490 s | 快 4.5% |
+| 指标（中位数）     | Southeast Asia | East Asia | East Asia 相对结果 |
+| ------------------ | -------------: | --------: | -----------------: |
+| 首页 TLS 建连      |        0.461 s |   0.539 s |           慢 16.9% |
+| 首页首字节         |        0.611 s |   0.728 s |           慢 19.1% |
+| 首页总时长         |        0.626 s |   0.752 s |           慢 20.1% |
+| API 总时长         |        0.610 s |   0.712 s |           慢 16.7% |
+| 连接复用后首页     |        0.159 s |   0.185 s |           慢 16.4% |
+| 27 MB 模型首字节   |        0.650 s |   0.724 s |           慢 11.4% |
+| 27 MB 模型完整下载 |        2.608 s |   2.490 s |            快 4.5% |
 
 ## 如何理解结果
 

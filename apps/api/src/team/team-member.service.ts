@@ -57,14 +57,17 @@ export class TeamMemberService {
           data: { invalidatedAt: new Date() },
         });
       }
+      await this.audit.record(
+        {
+          organizationId: session.organization.id,
+          actorAccountId: session.account.id,
+          type: 'team.member.updated',
+          outcome: 'SUCCESS',
+          metadata: { membershipId, changedFields: Object.keys(input) },
+        },
+        transaction,
+      );
       return result;
-    });
-    await this.audit.record({
-      organizationId: session.organization.id,
-      actorAccountId: session.account.id,
-      type: 'team.member.updated',
-      outcome: 'SUCCESS',
-      metadata: { membershipId, changedFields: Object.keys(input) },
     });
     return updated;
   }

@@ -11,6 +11,7 @@ import {
   parseSaveRouteSettingPlan,
   parseWallCode,
 } from './wall-route.dto';
+import { parseOptionalSettingJobId } from './wall-setting-job.dto';
 import { WallService } from './wall.service';
 
 @ApiTags('walls')
@@ -37,6 +38,12 @@ export class WallController {
   seedW06(@CurrentSessionContext() session: CurrentSession) {
     return this.walls.seedW06Demo(session);
   }
+
+  @Post('workspaces/w06')
+  @ApiOperation({ summary: '幂等创建 W06 测绘墙面与孔位，不创建演示线路' })
+  ensureW06Workspace(@CurrentSessionContext() session: CurrentSession) {
+    return this.walls.ensureW06Workspace(session);
+  }
 }
 
 @ApiTags('routes')
@@ -48,8 +55,12 @@ export class RouteSettingController {
 
   @Get('setting-plan')
   @ApiOperation({ summary: '读取墙面的当前定线计划' })
-  getPlan(@CurrentSessionContext() session: CurrentSession, @Query('wallCode') wallCode: unknown) {
-    return this.routes.getPlan(session, parseWallCode(wallCode));
+  getPlan(
+    @CurrentSessionContext() session: CurrentSession,
+    @Query('wallCode') wallCode: unknown,
+    @Query('jobId') jobId: unknown,
+  ) {
+    return this.routes.getPlan(session, parseWallCode(wallCode), parseOptionalSettingJobId(jobId));
   }
 
   @Put('setting-plan/:wallCode')
@@ -74,6 +85,12 @@ export class ClimbObservationController {
   @ApiOperation({ summary: '按墙面、线路和时间范围读取攀爬事件' })
   list(@CurrentSessionContext() session: CurrentSession, @Query() query: unknown) {
     return this.observations.list(session, parseListObservations(query));
+  }
+
+  @Get('summary')
+  @ApiOperation({ summary: '按线路和结果聚合攀爬事件' })
+  summary(@CurrentSessionContext() session: CurrentSession, @Query() query: unknown) {
+    return this.observations.summary(session, parseListObservations(query));
   }
 
   @Post()

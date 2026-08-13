@@ -54,7 +54,7 @@ export function WallRouteMap(props: { plan: RouteSettingPlan; selectedRouteId: s
                 fill="none"
                 filter="url(#route-shadow)"
                 points={points}
-                stroke={routeColors[route.color]}
+                stroke={routeColor(route.color)}
                 strokeDasharray="18 34"
                 strokeLinecap="round"
                 strokeLinejoin="round"
@@ -71,14 +71,14 @@ export function WallRouteMap(props: { plan: RouteSettingPlan; selectedRouteId: s
                         cy={cy}
                         fill="none"
                         r="72"
-                        stroke={routeColors[route.color]}
+                        stroke={routeColor(route.color)}
                         strokeWidth="20"
                       />
                     )}
                     <circle
                       cx={hole!.xMm}
                       cy={cy}
-                      fill={routeColors[route.color]}
+                      fill={routeColor(route.color)}
                       r={terminal ? 47 : 38}
                       stroke="#ffffff"
                       strokeWidth="14"
@@ -111,4 +111,10 @@ export function WallRouteMap(props: { plan: RouteSettingPlan; selectedRouteId: s
 
 function findHole(holeId: string) {
   return W06_HOLES.find((hole) => hole.id === holeId);
+}
+
+function routeColor(color: string): string {
+  return color.startsWith('#')
+    ? color
+    : (routeColors[color as keyof typeof routeColors] ?? '#17715a');
 }

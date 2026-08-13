@@ -5,7 +5,6 @@ import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { W06_HOLES } from '../walls/w06-wall-data';
-import { HOLD_ASSETS } from './route-setting-demo-data';
 import { findNearestWallHole, findPlacementCollisions, findWallHole } from './route-setting-domain';
 import type {
   HoldAssetDefinition,
@@ -22,6 +21,7 @@ export interface RouteSettingSceneHandle {
 }
 
 interface RouteSettingSceneProps {
+  assets: HoldAssetDefinition[];
   onDeleteSelected: () => void;
   onMovePlacement: (placementId: string, holeId: string) => void;
   onRotateSelected: (deltaDegrees: number) => void;
@@ -72,7 +72,7 @@ export const RouteSettingScene = forwardRef<RouteSettingSceneHandle, RouteSettin
         selectionPosition: setSelectionPosition,
       });
       controllerRef.current = controller;
-      void controller.initialize().then((initialized) => {
+      void controller.initialize(propsRef.current.assets).then((initialized) => {
         if (!initialized || controllerRef.current !== controller) return;
         controller.setPlan(
           propsRef.current.plan,
@@ -90,6 +90,10 @@ export const RouteSettingScene = forwardRef<RouteSettingSceneHandle, RouteSettin
     useEffect(() => {
       controllerRef.current?.setPlan(props.plan, props.selectedRouteId, props.selectedPlacementId);
     }, [props.plan, props.selectedPlacementId, props.selectedRouteId]);
+
+    useEffect(() => {
+      void controllerRef.current?.setAssets(props.assets);
+    }, [props.assets]);
 
     useEffect(() => controllerRef.current?.setView(props.view), [props.view]);
 
@@ -132,6 +136,7 @@ export const RouteSettingScene = forwardRef<RouteSettingSceneHandle, RouteSettin
 
 class RouteSettingSceneController {
   private readonly assets = new Map<string, THREE.Object3D>();
+  private readonly assetDefinitions = new Map<string, HoldAssetDefinition>();
   private readonly camera = new THREE.PerspectiveCamera(38, 1, 0.01, 50);
   private readonly callbacks: SceneCallbacks;
   private readonly container: HTMLDivElement;
@@ -160,17 +165,38 @@ class RouteSettingSceneController {
     this.resizeObserver = new ResizeObserver(() => this.resize());
   }
 
-  async initialize(): Promise<boolean> {
+  async initialize(assets: HoldAssetDefinition[]): Promise<boolean> {
     this.configureScene();
     this.buildWall();
     this.bindEvents();
     this.container.append(this.renderer.domElement);
     this.configureControls();
     this.resizeObserver.observe(this.container);
-    await this.loadAssets();
+    await this.setAssets(assets);
     if (this.disposed) return false;
     this.render();
     return true;
+  }
+
+  async setAssets(assets: HoldAssetDefinition[]): Promise<void> {
+    const nextFingerprint = assets.map((asset) => `${asset.assetId}:${asset.modelUrl}`).join('|');
+    const currentFingerprint = [...this.assetDefinitions.values()]
+      .map((asset) => `${asset.assetId}:${asset.modelUrl}`)
+      .join('|');
+    if (nextFingerprint === currentFingerprint) return;
+    for (const asset of this.assets.values()) disposeObject(asset, true);
+    this.assets.clear();
+    this.assetDefinitions.clear();
+    assets.forEach((asset) => this.assetDefinitions.set(asset.assetId, asset));
+    await Promise.allSettled(
+      assets.map(async (asset) => {
+        const gltf = await this.loader.loadAsync(asset.modelUrl);
+        if (this.disposed) return disposeObject(gltf.scene, true);
+        this.assets.set(asset.assetId, gltf.scene);
+      }),
+    );
+    if (!this.disposed && this.plan) this.rebuildPlacements();
+    this.render();
   }
 
   setPlan(
@@ -289,27 +315,15 @@ class RouteSettingSceneController {
     this.wallGroup.add(wall, buildWallOutline(width, surfaceHeight), buildHoleGrid(width));
   }
 
-  private async loadAssets(): Promise<void> {
-    await Promise.all(
-      Object.values(HOLD_ASSETS).map(async (asset) => {
-        const gltf = await this.loader.loadAsync(asset.modelUrl);
-        if (this.disposed) {
-          disposeObject(gltf.scene, true);
-          return;
-        }
-        this.assets.set(asset.assetId, gltf.scene);
-      }),
-    );
-  }
-
   private rebuildPlacements(): void {
     this.clearPlacements();
     if (!this.plan) return;
-    const collisions = collisionIds(this.plan);
+    const definitions = [...this.assetDefinitions.values()];
+    const collisions = collisionIds(this.plan, definitions);
     for (const placement of this.plan.placements) {
       const hole = findWallHole(placement.holeId);
       const template = this.assets.get(placement.assetId);
-      const asset = assetById(placement.assetId);
+      const asset = this.assetDefinitions.get(placement.assetId);
       if (!hole || !template || !asset) continue;
       const wrapper = buildPlacementObject(template, placement.id);
       wrapper.position.set(hole.xMm / 1000 - this.plan.wall.widthMm / 2000, 0.031, hole.zMm / 1000);
@@ -554,17 +568,13 @@ function addPlacementMarkers(
   wrapper.add(marker);
 }
 
-function collisionIds(plan: RouteSettingPlan): Set<string> {
+function collisionIds(plan: RouteSettingPlan, assets: HoldAssetDefinition[]): Set<string> {
   const ids = new Set<string>();
-  for (const collision of findPlacementCollisions(plan)) {
+  for (const collision of findPlacementCollisions(plan, assets)) {
     ids.add(collision.firstPlacementId);
     ids.add(collision.secondPlacementId);
   }
   return ids;
-}
-
-function assetById(assetId: string): HoldAssetDefinition | undefined {
-  return Object.values(HOLD_ASSETS).find((asset) => asset.assetId === assetId);
 }
 
 function canvasBlob(canvas: HTMLCanvasElement): Promise<Blob> {

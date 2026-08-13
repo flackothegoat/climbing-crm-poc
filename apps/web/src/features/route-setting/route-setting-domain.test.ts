@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { W06_HOLES } from '../walls/w06-wall-data';
-import { createSeedRouteSettingPlan } from './route-setting-demo-data';
+import { HOLD_ASSETS, createSeedRouteSettingPlan } from './route-setting-demo-data';
 import {
   exportPlacementCsv,
   exportRouteSettingPlanJson,
@@ -15,6 +15,7 @@ import {
 } from './route-setting-domain';
 
 describe('W06 route-setting domain', () => {
+  const assets = Object.values(HOLD_ASSETS);
   it('builds the estimated 28 by 21 hole grid', () => {
     expect(W06_HOLES).toHaveLength(588);
     expect(W06_HOLES[0]).toMatchObject({ column: 0, row: 0, xMm: 96, zMm: 84 });
@@ -39,7 +40,7 @@ describe('W06 route-setting domain', () => {
     const result = removeRoutePlacements(plan, 'route-red');
     expect(result.placements.some((item) => item.routeId === 'route-red')).toBe(false);
     expect(result.placements).toHaveLength(14);
-    expect(exportPlacementCsv(result)).toContain('W06-C06-R02');
+    expect(exportPlacementCsv(result, assets)).toContain('W06-C06-R02');
   });
 
   it('exports a versioned JSON plan with the calibration boundary intact', () => {
@@ -62,7 +63,7 @@ describe('W06 route-setting domain', () => {
       (hole) => hole.row === firstHole.row && hole.column === firstHole.column + 1,
     )!;
     const moved = movePlacement(plan, second.id, adjacent.id);
-    expect(findPlacementCollisions(moved)).toContainEqual({
+    expect(findPlacementCollisions(moved, assets)).toContainEqual({
       firstPlacementId: first.id,
       secondPlacementId: second.id,
     });
@@ -70,12 +71,12 @@ describe('W06 route-setting domain', () => {
 
   it('matches the scanned single-bolt anchor to its wall hole', () => {
     const plan = createSeedRouteSettingPlan();
-    const match = matchPlacementMount(plan.placements[0]);
+    const match = matchPlacementMount(plan.placements[0], assets);
     expect(match).toEqual({
       valid: true,
       matchedHoles: [{ role: 'PRIMARY_BOLT', holeId: 'W06-C06-R02', distanceMm: 0 }],
     });
-    expect(placementHasMountConflict(plan, plan.placements[0].id)).toBe(false);
+    expect(placementHasMountConflict(plan, plan.placements[0].id, assets)).toBe(false);
   });
 
   it('removes one selected placement without changing its route', () => {

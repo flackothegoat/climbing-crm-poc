@@ -17,11 +17,11 @@ describe('SessionService', () => {
     const expiresAt = new Date('2026-08-01T00:00:00.000Z');
     const record = {
       expiresAt,
-      account: { id: 'account-1', email: 'owner@example.com' },
       membership: {
         id: 'membership-1',
         displayName: '岩馆老板',
         role: 'L1_ADMIN',
+        account: { id: 'account-1', email: 'owner@example.com' },
         organization: { id: 'org-1', name: 'Peak Climbing' },
       },
     };

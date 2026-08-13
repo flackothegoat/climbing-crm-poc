@@ -341,6 +341,11 @@
   cursor: grabbing;
 }
 
+.paletteItem:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
 .paletteItem img {
   aspect-ratio: 1;
   background: #dfe7e4;
@@ -355,6 +360,22 @@
   display: block;
   font-size: 10px;
   padding: 7px 4px 8px;
+}
+
+.paletteItem small {
+  color: #6b7a74;
+  display: block;
+  font-size: 9px;
+  line-height: 1.35;
+  padding: 0 4px 8px;
+}
+
+.assetSwatch {
+  aspect-ratio: 1;
+  border-radius: 10px 10px 0 0;
+  display: block;
+  min-height: 88px;
+  opacity: 0.78;
 }
 
 .selectionDetails {
