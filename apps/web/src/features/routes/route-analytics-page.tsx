@@ -1,13 +1,12 @@
 'use client';
 
-import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { PageHeading, SectionCard, StatGrid } from '../dashboard/page-components';
 import { climbingColorCss } from '../common/climbing-colors';
 import { getRouteAnalytics, type RouteAnalytics } from './route-operations-api';
 import styles from './routes.module.css';
 
-export function RouteAnalyticsPage() {
+export function RouteAnalyticsPage({ embedded = false }: { embedded?: boolean }) {
   const [data, setData] = useState<RouteAnalytics | null>(null);
   const [error, setError] = useState('');
 
@@ -21,16 +20,13 @@ export function RouteAnalyticsPage() {
 
   return (
     <div className="page-stack">
-      <PageHeading
-        eyebrow="第一阶段 · 二维码反馈"
-        title="线路表现"
-        description="用清晰的数据来源和样本量辅助换线复盘，不把主动反馈包装成全馆真实客流。"
-        aside={
-          <Link className={styles.secondaryButton} href="/dashboard/assets/routes">
-            管理线路与二维码
-          </Link>
-        }
-      />
+      {!embedded && (
+        <PageHeading
+          eyebrow="线路库 · 二维码反馈"
+          title="线路表现"
+          description="用清晰的数据来源和样本量辅助换线复盘，不把主动反馈包装成全馆真实客流。"
+        />
+      )}
       <StatGrid
         items={[
           {

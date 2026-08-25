@@ -46,7 +46,7 @@ export class RoutePhotoService {
     const version = route?.versions[0];
     if (!route || !version) throw new NotFoundException('可上传照片的线路草稿不存在');
     if (version._count.placements > 0) {
-      throw new ConflictException('三维定线草稿的媒体请在实验定线工作台维护');
+      throw new ConflictException('历史三维定线草稿已停止维护，请新建线路档案');
     }
     const content = await file.toBuffer();
     const validated = validatePhoto(file.filename, content);

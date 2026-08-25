@@ -157,7 +157,10 @@ export interface HoldSpecificationInput {
 }
 
 export async function getHoldCategories(search: string, gripType: string, showStopped: boolean) {
-  const query = new URLSearchParams({ status: showStopped ? 'ALL' : 'ACTIVE' });
+  const query = new URLSearchParams({
+    status: showStopped ? 'ALL' : 'ACTIVE',
+    pageSize: '100',
+  });
   if (search) query.set('search', search);
   if (gripType) query.set('gripType', gripType);
   return apiRequest<HoldCategoryListResponse>(`/holds/categories?${query.toString()}`, {

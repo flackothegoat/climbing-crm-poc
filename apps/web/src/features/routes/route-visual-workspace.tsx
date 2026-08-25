@@ -14,7 +14,7 @@ import { RouteVisualScene } from './route-visual-scene';
 import { RouteVisualTopo } from './route-visual-topo';
 import styles from './route-visual.module.css';
 
-type ViewMode = 'MODEL' | 'TOPO' | 'CAMERA';
+type ViewMode = 'MODEL' | 'TOPO';
 
 export function RouteVisualWorkspace({
   initialRoute,
@@ -135,13 +135,6 @@ export function RouteVisualWorkspace({
             <button aria-pressed={mode === 'TOPO'} type="button" onClick={() => setMode('TOPO')}>
               正立面线路图
             </button>
-            <button
-              aria-pressed={mode === 'CAMERA'}
-              type="button"
-              onClick={() => setMode('CAMERA')}
-            >
-              现场画面
-            </button>
           </div>
           {mode === 'MODEL' && (
             <RouteVisualScene
@@ -161,7 +154,6 @@ export function RouteVisualWorkspace({
               segments={segments}
             />
           )}
-          {mode === 'CAMERA' && <CameraPanel segments={segments.map((item) => item.code)} />}
         </div>
         <aside className={styles.inspector}>
           <div>
@@ -228,32 +220,5 @@ export function RouteVisualWorkspace({
         </aside>
       </div>
     </section>
-  );
-}
-
-function CameraPanel({ segments }: { segments: string[] }) {
-  return (
-    <div className={styles.cameraPanel}>
-      <span>LIVE</span>
-      <strong>尚未绑定现场摄像头</strong>
-      <p>
-        TL-IPC48AN 的公网推流链路已跑通；岩馆实测后，可把设备与 {segments.join(' / ')}{' '}
-        的观察区域绑定。此处不会用演示视频冒充实时分析。
-      </p>
-      <dl>
-        <div>
-          <dt>视频状态</dt>
-          <dd>等待现场验证</dd>
-        </div>
-        <div>
-          <dt>算法状态</dt>
-          <dd>未启用</dd>
-        </div>
-        <div>
-          <dt>数据来源</dt>
-          <dd>二维码反馈</dd>
-        </div>
-      </dl>
-    </div>
   );
 }

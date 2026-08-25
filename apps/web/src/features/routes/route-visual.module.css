@@ -286,49 +286,6 @@
   text-anchor: middle;
   pointer-events: none;
 }
-.cameraPanel {
-  min-height: 560px;
-  display: grid;
-  align-content: center;
-  justify-items: center;
-  gap: 14px;
-  padding: 42px;
-  color: #dbe8e2;
-  text-align: center;
-  background: radial-gradient(circle at 50% 40%, #234f40, #102c24);
-}
-.cameraPanel > span {
-  padding: 5px 10px;
-  border-radius: 99px;
-  color: #9fb5ac;
-  border: 1px solid #547064;
-  font-size: 11px;
-  letter-spacing: 0.12em;
-}
-.cameraPanel p {
-  max-width: 560px;
-  margin: 0;
-  color: #aabdb5;
-  line-height: 1.7;
-}
-.cameraPanel dl {
-  display: flex;
-  gap: 10px;
-}
-.cameraPanel dl div {
-  min-width: 120px;
-  padding: 12px;
-  border: 1px solid #47665a;
-  border-radius: 10px;
-}
-.cameraPanel dt {
-  color: #86a097;
-  font-size: 11px;
-}
-.cameraPanel dd {
-  margin: 4px 0 0;
-  font-weight: 700;
-}
 @media (max-width: 980px) {
   .workspaceBody {
     grid-template-columns: 1fr;

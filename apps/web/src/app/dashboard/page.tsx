@@ -2,21 +2,20 @@ import { CoreModuleCard, SectionCard, StatGrid } from '../../features/dashboard/
 
 const overviewStats = [
   {
-    label: '第一阶段主线',
-    value: '已接入',
-    detail: '线路建档、发布与下线',
+    label: '岩点资产',
+    value: '可管理',
+    detail: '档案、数量、状态与模型',
     tone: 'accent' as const,
   },
-  { label: '会员入口', value: 'QR', detail: '匿名 10 秒反馈' },
-  { label: '运营数据', value: '分来源', detail: '样本量与指标边界' },
-  { label: '摄像头', value: '增强项', detail: '不阻塞二维码闭环', tone: 'warning' as const },
+  { label: '线路档案', value: '可发布', detail: '位置、二维码与生命周期' },
+  { label: '会员反馈', value: 'QR', detail: '匿名 10 秒反馈' },
+  { label: '试点区域', value: 'W03–W05', detail: '线路视觉定位', tone: 'warning' as const },
 ];
 
 const readiness = [
-  ['身份与权限', '已就绪', '账号、组织、L1/L2 角色和会话基础已建立'],
-  ['员工管理', '已接入', '邀请、成员状态、固定权限和审计接口已建立'],
-  ['线路运营', '已接入', '跨墙段建档、版本发布、二维码和历史下线已建立'],
-  ['反馈与复盘', '已接入', '难度、喜好、安全疑虑、样本置信度和透明建议已建立'],
+  ['岩点库', '主线', '同款岩点只建一份档案，数量按仓库、上墙和维护状态管理'],
+  ['线路库', '主线', '线路建档、墙段位置、发布、二维码反馈和下线历史'],
+  ['W03–W05 视觉', '试点', '选择线路后保留原色岩点、显示黄色轮廓和 S/T'],
 ];
 
 export default function DashboardPage() {
@@ -27,37 +26,23 @@ export default function DashboardPage() {
       <section className="overview-grid">
         <SectionCard
           title="核心模块"
-          description="第一阶段以线路为中心；资产和三维能力作为后续增强。"
+          description="系统只保留两条业务主线，其他能力不进入当前产品界面。"
           className="module-section"
         >
           <div className="core-module-grid">
             <CoreModuleCard
-              href="/dashboard/assets/routes"
-              icon="routes"
-              title="线路运营"
-              description="建档、发布与二维码"
-              status="已接入"
-            />
-            <CoreModuleCard
-              href="/dashboard/data"
-              icon="data"
-              title="线路数据"
-              description="反馈、置信度与复盘"
-              status="已接入"
-            />
-            <CoreModuleCard
-              href="/dashboard/assets/walls"
-              icon="walls"
-              title="墙面"
-              description="区域、墙段与定位"
-              status="可复用"
-            />
-            <CoreModuleCard
               href="/dashboard/assets/holds"
               icon="holds"
-              title="岩点资产"
-              description="库存与 3D 增强"
-              status="第二阶段"
+              title="岩点库"
+              description="档案、库存、照片与 3D"
+              status="客户需求"
+            />
+            <CoreModuleCard
+              href="/dashboard/assets/routes"
+              icon="routes"
+              title="线路库"
+              description="建档、视觉、反馈与复盘"
+              status="第一阶段"
             />
           </div>
         </SectionCard>
@@ -81,32 +66,32 @@ export default function DashboardPage() {
         </SectionCard>
       </section>
       <SectionCard
-        title="第一阶段演示路径"
-        description="不依赖摄像头、GLB 或精确孔位即可完成一条真实业务闭环。"
+        title="当前演示路径"
+        description="先展示两条独立主线的真实价值，再逐步建立可选关联。"
       >
         <div className="demo-path">
           <span>1</span>
           <p>
-            <strong>线路建档</strong>
-            <small>墙段、难度、照片与定线员</small>
+            <strong>岩点入库</strong>
+            <small>同款建档一次，记录数量与状态</small>
           </p>
           <b>→</b>
           <span>2</span>
           <p>
-            <strong>发布二维码</strong>
-            <small>生成可打印会员入口</small>
+            <strong>线路建档</strong>
+            <small>关联 W03–W05 墙段并确认视觉位置</small>
           </p>
           <b>→</b>
           <span>3</span>
           <p>
-            <strong>会员反馈</strong>
-            <small>完攀、难度、喜好与安全</small>
+            <strong>发布与反馈</strong>
+            <small>二维码收集完攀、难度与喜好</small>
           </p>
           <b>→</b>
           <span>4</span>
           <p>
-            <strong>线路复盘</strong>
-            <small>按样本量辅助保留或调整</small>
+            <strong>查看结果</strong>
+            <small>库存清晰，线路表现可复盘</small>
           </p>
         </div>
       </SectionCard>
@@ -118,9 +103,9 @@ function OverviewHero() {
   return (
     <section className="overview-hero">
       <div className="overview-hero-copy">
-        <p className="page-eyebrow">CLIMBING GYM · OPERATIONS</p>
-        <h2>线路运营数字化底座</h2>
-        <p>先让每次定线都能被记录、反馈、分析和复盘，再逐步接入摄像头与 AI。</p>
+        <p className="page-eyebrow">CLIMBING GYM · DIGITAL FOUNDATION</p>
+        <h2>岩点库与线路库</h2>
+        <p>先把岩馆有什么岩点、正在运营什么线路说明白，再积累反馈和后续智能能力。</p>
         <span className="poc-badge is-inverse">
           <i />
           POC 环境
@@ -144,8 +129,8 @@ function RouteVisual() {
         <circle cx="362" cy="230" r="8" />
       </svg>
       <span className="route-visual-label">
-        <small>第一阶段数据闭环</small>
-        <strong>线路 · 反馈 · 完攀 · 换线复盘</strong>
+        <small>当前产品范围</small>
+        <strong>岩点资产 · 线路视觉 · 会员反馈</strong>
       </span>
     </div>
   );

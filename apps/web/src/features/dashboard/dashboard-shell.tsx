@@ -98,7 +98,7 @@ function Sidebar(props: SidebarProps) {
           onNavigate={props.onNavigate}
           onToggle={props.onAssetToggle}
         />
-        <p className="navigation-label">辅助工具</p>
+        <p className="navigation-label">系统管理</p>
         <NavigationList
           items={secondaryNavigation}
           pathname={props.pathname}
@@ -157,7 +157,6 @@ function NavigationLink({
     >
       <DashboardIcon name={item.icon} />
       <span>{item.label}</span>
-      {item.dummy && <small>Dummy</small>}
     </Link>
   );
 }
@@ -183,7 +182,7 @@ function AssetNavigation({
         onClick={onToggle}
       >
         <DashboardIcon name="assets" />
-        <span>资产管理</span>
+        <span>业务模块</span>
         <DashboardIcon className={`navigation-chevron ${open ? 'is-open' : ''}`} name="chevron" />
       </button>
       {open && (

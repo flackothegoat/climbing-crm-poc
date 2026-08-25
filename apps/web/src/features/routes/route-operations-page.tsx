@@ -1,6 +1,5 @@
 'use client';
 
-import Link from 'next/link';
 import Image from 'next/image';
 import QRCode from 'qrcode';
 import { useEffect, useState, type FormEvent } from 'react';
@@ -25,6 +24,7 @@ import {
   type RouteInput,
 } from './route-operations-api';
 import styles from './routes.module.css';
+import { RouteAnalyticsPage } from './route-analytics-page';
 import { RouteVisualWorkspace } from './route-visual-workspace';
 
 const emptyForm: RouteInput = {
@@ -49,6 +49,7 @@ export function RouteOperationsPage() {
   const [editing, setEditing] = useState<OperationalRoute | null>(null);
   const [qrRoute, setQrRoute] = useState<OperationalRoute | null>(null);
   const [visualRoute, setVisualRoute] = useState<OperationalRoute | null>(null);
+  const [view, setView] = useState<'CATALOG' | 'ANALYTICS'>('CATALOG');
 
   async function refresh() {
     setLoading(true);
@@ -78,17 +79,43 @@ export function RouteOperationsPage() {
     setShowForm(true);
   }
 
+  if (view === 'ANALYTICS') {
+    return (
+      <div className="page-stack">
+        <PageHeading
+          eyebrow="线路库 · 反馈复盘"
+          title="线路表现"
+          description="按线路版本查看二维码反馈、难度偏差和安全疑虑。"
+          aside={
+            <button
+              className={styles.secondaryButton}
+              type="button"
+              onClick={() => setView('CATALOG')}
+            >
+              返回线路档案
+            </button>
+          }
+        />
+        <RouteAnalyticsPage embedded />
+      </div>
+    );
+  }
+
   return (
     <div className="page-stack">
       <PageHeading
         eyebrow="第一阶段 · 线路数字化"
         title="线路运营"
-        description="先完成线路建档、发布、二维码反馈和复盘；三维定线作为可选实验能力。"
+        description="完成线路建档、W03–W05 视觉定位、发布二维码、会员反馈和复盘。"
         aside={
           <div className={styles.headingActions}>
-            <Link className={styles.secondaryButton} href="/dashboard/assets/routes/setting">
-              3D 实验定线
-            </Link>
+            <button
+              className={styles.secondaryButton}
+              type="button"
+              onClick={() => setView('ANALYTICS')}
+            >
+              反馈与复盘
+            </button>
             <button
               className={styles.primaryButton}
               type="button"

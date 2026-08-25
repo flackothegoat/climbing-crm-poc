@@ -15,8 +15,9 @@ describe('route visual pilot region', () => {
   });
 
   it('restricts color analysis to the route wall segments', () => {
-    expect(segmentBoundsForRoute(W03_W05_PILOT_REGION, ['W04', 'W05']).map((item) => item.code))
-      .toEqual(['W04', 'W05']);
+    expect(
+      segmentBoundsForRoute(W03_W05_PILOT_REGION, ['W04', 'W05']).map((item) => item.code),
+    ).toEqual(['W04', 'W05']);
   });
 
   it('maps persisted top-left normalized points into model-local calibration', () => {

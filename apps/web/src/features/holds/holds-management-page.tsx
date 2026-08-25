@@ -21,6 +21,7 @@ export function HoldsManagementPage({ session }: { session: AuthenticatedSession
   const [createOpen, setCreateOpen] = useState(false);
   const [createCategoryId, setCreateCategoryId] = useState('');
   const [selectedCategoryId, setSelectedCategoryId] = useState('');
+  const [selectedSpecificationId, setSelectedSpecificationId] = useState('');
   const data = useHoldsData(search, gripType, showStopped);
   const initialization = useHoldInitialization();
 
@@ -35,6 +36,7 @@ export function HoldsManagementPage({ session }: { session: AuthenticatedSession
 
   function openCreateRecord(categoryId = ''): void {
     setSelectedCategoryId('');
+    setSelectedSpecificationId('');
     setCreateCategoryId(categoryId);
     setCreateOpen(true);
   }
@@ -43,8 +45,8 @@ export function HoldsManagementPage({ session }: { session: AuthenticatedSession
     <div className="page-stack">
       <PageHeading
         eyebrow="岩点管理"
-        title="岩点档案与库存"
-        description="岩点资料、库存和 3D 模型都在这里。"
+        title="岩点库"
+        description="同款岩点只建一份档案，通过数量管理仓库、上墙和维护状态。"
         aside={
           <button className="page-action page-action-active" onClick={() => openCreateRecord()}>
             <DashboardIcon name="holds" />
@@ -77,7 +79,10 @@ export function HoldsManagementPage({ session }: { session: AuthenticatedSession
       <HoldTable
         categories={data.categories}
         loading={data.loading}
-        onSelect={(category) => setSelectedCategoryId(category.id)}
+        onSelect={(category, specification) => {
+          setSelectedCategoryId(category.id);
+          setSelectedSpecificationId(specification.id);
+        }}
       />
       {createOpen && (
         <CreateHoldRecordDialog
@@ -91,9 +96,13 @@ export function HoldsManagementPage({ session }: { session: AuthenticatedSession
         <HoldDetailPanel
           canAdjust={session.role === 'L1_ADMIN'}
           categoryId={selectedCategoryId}
+          initialSpecificationId={selectedSpecificationId}
           initializationBatch={initialization.batch}
           onChanged={refreshAll}
-          onClose={() => setSelectedCategoryId('')}
+          onClose={() => {
+            setSelectedCategoryId('');
+            setSelectedSpecificationId('');
+          }}
           onCreateRecord={openCreateRecord}
         />
       )}

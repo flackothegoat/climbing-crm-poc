@@ -11,6 +11,7 @@ import { ReverseReceiptControl } from './reverse-receipt-control';
 
 interface DetailPanelProps {
   categoryId: string;
+  initialSpecificationId?: string;
   canAdjust: boolean;
   initializationBatch: HoldInitializationBatch | null;
   onChanged: () => Promise<void>;
@@ -57,6 +58,7 @@ export function HoldDetailPanel(props: DetailPanelProps) {
             <DetailContent
               category={category}
               canAdjust={props.canAdjust}
+              initialSpecificationId={props.initialSpecificationId}
               initializationBatch={props.initializationBatch}
               onCreateRecord={props.onCreateRecord}
               onChanged={refreshAll}
@@ -100,6 +102,7 @@ function DetailHeader(props: { category: HoldCategoryDetail | null; onClose: () 
 function DetailContent(props: {
   category: HoldCategoryDetail;
   canAdjust: boolean;
+  initialSpecificationId?: string;
   initializationBatch: HoldInitializationBatch | null;
   onChanged: () => Promise<void>;
   onDeleted: () => Promise<void>;
@@ -116,6 +119,7 @@ function DetailContent(props: {
       <SpecificationSection
         category={props.category}
         canAdjust={props.canAdjust}
+        initialSpecificationId={props.initialSpecificationId}
         initializationBatch={props.initializationBatch}
         onCreateRecord={props.onCreateRecord}
         onChanged={props.onChanged}
@@ -139,6 +143,7 @@ function DetailContent(props: {
 function SpecificationSection(props: {
   category: HoldCategoryDetail;
   canAdjust: boolean;
+  initialSpecificationId?: string;
   initializationBatch: HoldInitializationBatch | null;
   onChanged: () => Promise<void>;
   onCreateRecord: (categoryId: string) => void;
@@ -163,6 +168,7 @@ function SpecificationSection(props: {
           specifications={props.category.specifications}
           categoryActive={active}
           canAdjust={props.canAdjust}
+          initialExpandedId={props.initialSpecificationId}
           initializationBatch={props.initializationBatch}
           onChanged={props.onChanged}
         />

@@ -232,7 +232,7 @@ export class RouteOperationsService {
       const route = await findDraftRoute(transaction, session.organization.id, routeId);
       const version = route.versions[0];
       if (!version || version.settingJobId || version._count.placements > 0) {
-        throw new ConflictException('三维定线草稿请在实验定线工作台中修改');
+        throw new ConflictException('历史三维定线草稿已停止维护，请新建线路档案');
       }
       await assertRouteContext(transaction, session.organization.id, {
         setterMembershipId:

@@ -5,8 +5,6 @@ import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import type { ClimbingColor } from '../common/climbing-colors';
-import { TIANYU_1F_SCAN_MODEL_URL, WALL_SURVEY_SEGMENTS } from '../walls/wall-survey-data';
-import type { WallSurveySegment } from '../walls/wall.types';
 import type { RouteVisualPoint, RouteWallSegment } from './route-operations-api';
 import {
   normalizedPointInRegion,
@@ -41,9 +39,10 @@ export function RouteVisualScene({
   addRef.current = onAddPoint;
 
   useEffect(() => {
-    if (!host.current) return;
+    if (!host.current || !region) return;
     const next = new RouteVisualController(
       host.current,
+      region,
       (point) => addRef.current(point),
       setStatus,
     );
@@ -53,7 +52,7 @@ export function RouteVisualScene({
       next.dispose();
       controller.current = null;
     };
-  }, [segments]);
+  }, [region, segments]);
 
   useEffect(() => controller.current?.setRoute(points, color, editable), [points, color, editable]);
 
@@ -78,16 +77,16 @@ export function RouteVisualScene({
           {region ? '中性色暂不自动分割，请使用已确认视觉点定位。' : '该墙段尚未接入区域扫描模型。'}
         </div>
       )}
-      {status !== 'READY' && (
+      {!region && (
         <div className={styles.sceneStatus} role="status">
-          <strong>{status === 'ERROR' ? '扫描模型载入失败' : `正在载入${region?.name ?? '一楼扫描模型'}`}</strong>
-          <small>
-            {status === 'ERROR'
-              ? '可切换正立面继续标注。'
-              : region
-                ? '试点模型约 5 MB。'
-                : '首次约需载入 28 MB。'}
-          </small>
+          <strong>该线路不在 W03–W05 试点区域</strong>
+          <small>可切换正立面查看位置；系统不会再加载旧整馆演示模型。</small>
+        </div>
+      )}
+      {region && status !== 'READY' && (
+        <div className={styles.sceneStatus} role="status">
+          <strong>{status === 'ERROR' ? '扫描模型载入失败' : `正在载入${region.name}`}</strong>
+          <small>{status === 'ERROR' ? '可切换正立面继续标注。' : '试点模型约 5 MB。'}</small>
         </div>
       )}
     </div>
@@ -123,12 +122,12 @@ class RouteVisualController {
   private readonly routeLayer = new THREE.Group();
   private readonly routeShaders: RouteShaderUniforms[] = [];
   private readonly scene = new THREE.Scene();
-  private region: RouteVisualRegion | null = null;
   private routePoints: RouteVisualPoint[] = [];
   private routeSegments: RouteWallSegment[] = [];
 
   constructor(
     host: HTMLDivElement,
+    private readonly region: RouteVisualRegion,
     onAdd: (point: Omit<RouteVisualPoint, 'role'>) => void,
     onStatus: (status: LoadStatus) => void,
   ) {
@@ -147,7 +146,6 @@ class RouteVisualController {
 
   async initialize(segments: RouteWallSegment[]) {
     this.routeSegments = segments;
-    this.region = resolveRouteVisualRegion(segments.map((segment) => segment.code));
     this.scene.background = new THREE.Color('#d7ddda');
     this.scene.add(this.routeLayer);
     this.host.append(this.renderer.domElement);
@@ -155,12 +153,10 @@ class RouteVisualController {
     this.renderer.domElement.addEventListener('pointerdown', this.pointerStart);
     this.renderer.domElement.addEventListener('pointerup', this.pointerEnd);
     try {
-      const gltf = await new GLTFLoader().loadAsync(
-        this.region?.modelUrl ?? TIANYU_1F_SCAN_MODEL_URL,
-      );
+      const gltf = await new GLTFLoader().loadAsync(this.region.modelUrl);
       if (this.disposed) return disposeObject(gltf.scene);
       this.modelRoot = gltf.scene;
-      if (this.region) this.installRouteIsolationMaterials(gltf.scene);
+      this.installRouteIsolationMaterials(gltf.scene);
       this.scene.add(gltf.scene);
       this.buildInteractionPanels();
       this.focusModel(gltf.scene);
@@ -200,7 +196,8 @@ class RouteVisualController {
       if (!(child instanceof THREE.Mesh)) return;
       const sourceMaterials = Array.isArray(child.material) ? child.material : [child.material];
       const isolated = sourceMaterials.map((source) => {
-        const sourceMap = 'map' in source && source.map instanceof THREE.Texture ? source.map : null;
+        const sourceMap =
+          'map' in source && source.map instanceof THREE.Texture ? source.map : null;
         const material = new THREE.MeshBasicMaterial({
           color: '#ffffff',
           map: sourceMap,
@@ -243,22 +240,17 @@ class RouteVisualController {
           '#include <begin_vertex>\nvRouteLocalPosition = position;',
         );
       shader.fragmentShader = shader.fragmentShader
-        .replace(
-          '#include <common>',
-          `${ROUTE_SHADER_DECLARATIONS}\n#include <common>`,
-        )
+        .replace('#include <common>', `${ROUTE_SHADER_DECLARATIONS}\n#include <common>`)
         .replace('#include <map_fragment>', ROUTE_MAP_FRAGMENT);
     };
   }
 
   private updateShaderSelection() {
     const profile = routeColorAnalysisProfile(this.currentColor);
-    const bounds = this.region
-      ? segmentBoundsForRoute(
-          this.region,
-          this.routeSegments.map((segment) => segment.code),
-        )
-      : [];
+    const bounds = segmentBoundsForRoute(
+      this.region,
+      this.routeSegments.map((segment) => segment.code),
+    );
     for (const uniforms of this.routeShaders) {
       uniforms.routeEnabled.value = profile.enabled ? 1 : 0;
       uniforms.routeHue.value = profile.hue;
@@ -285,7 +277,8 @@ class RouteVisualController {
     });
     for (const { index, point, position } of projected) {
       if (point.role === 'NORMAL' && !this.editable) continue;
-      const label = point.role === 'START' ? 'S' : point.role === 'FINISH' ? 'T' : String(index + 1);
+      const label =
+        point.role === 'START' ? 'S' : point.role === 'FINISH' ? 'T' : String(index + 1);
       const marker = makeMarker(label, point.role);
       marker.position.copy(position);
       marker.renderOrder = 80;
@@ -294,67 +287,42 @@ class RouteVisualController {
   }
 
   private projectPoint(segmentCode: string, point: RouteVisualPoint) {
-    if (this.region) {
-      const calibrated = normalizedPointInRegion(
-        this.region,
-        segmentCode,
-        point.uNormalized,
-        point.vNormalized,
+    const calibrated = normalizedPointInRegion(
+      this.region,
+      segmentCode,
+      point.uNormalized,
+      point.vNormalized,
+    );
+    if (!calibrated) return null;
+    if (this.modelRoot) {
+      this.raycaster.set(
+        new THREE.Vector3(calibrated.x, calibrated.y, 2),
+        new THREE.Vector3(0, 0, -1),
       );
-      if (!calibrated) return null;
-      if (this.modelRoot) {
-        this.raycaster.set(
-          new THREE.Vector3(calibrated.x, calibrated.y, 2),
-          new THREE.Vector3(0, 0, -1),
-        );
-        const hit = this.raycaster.intersectObject(this.modelRoot, true)[0];
-        if (hit) return hit.point.add(new THREE.Vector3(0, 0, 0.025));
-      }
-      return new THREE.Vector3(calibrated.x, calibrated.y, 0.5);
+      const hit = this.raycaster.intersectObject(this.modelRoot, true)[0];
+      if (hit) return hit.point.add(new THREE.Vector3(0, 0, 0.025));
     }
-    const survey = findSurvey(segmentCode);
-    return survey ? legacyPointPosition(survey, point.uNormalized, point.vNormalized) : null;
+    return new THREE.Vector3(calibrated.x, calibrated.y, 0.5);
   }
 
   private buildInteractionPanels() {
-    if (this.region) {
-      for (const routeSegment of this.routeSegments) {
-        const bounds = this.region.segmentBounds.find((item) => item.code === routeSegment.code);
-        if (!bounds) continue;
-        const height = this.region.verticalBounds.max - this.region.verticalBounds.min;
-        const mesh = new THREE.Mesh(
-          new THREE.PlaneGeometry(bounds.xMax - bounds.xMin, height),
-          new THREE.MeshBasicMaterial({
-            depthWrite: false,
-            opacity: 0,
-            transparent: true,
-          }),
-        );
-        mesh.position.set(
-          (bounds.xMin + bounds.xMax) / 2,
-          (this.region.verticalBounds.min + this.region.verticalBounds.max) / 2,
-          0.51,
-        );
-        mesh.userData.wallSegmentId = routeSegment.id;
-        this.panels.set(routeSegment.id, mesh);
-        this.scene.add(mesh);
-      }
-      return;
-    }
     for (const routeSegment of this.routeSegments) {
-      const segment = findSurvey(routeSegment.code);
-      if (!segment) continue;
+      const bounds = this.region.segmentBounds.find((item) => item.code === routeSegment.code);
+      if (!bounds) continue;
+      const height = this.region.verticalBounds.max - this.region.verticalBounds.min;
       const mesh = new THREE.Mesh(
-        new THREE.PlaneGeometry(segment.widthMm / 1000, segment.heightMm / 1000),
+        new THREE.PlaneGeometry(bounds.xMax - bounds.xMin, height),
         new THREE.MeshBasicMaterial({
-          depthTest: false,
+          depthWrite: false,
           opacity: 0,
-          side: THREE.DoubleSide,
           transparent: true,
         }),
       );
-      mesh.position.copy(segmentCenter(segment));
-      mesh.rotation.y = segmentYaw(segment);
+      mesh.position.set(
+        (bounds.xMin + bounds.xMax) / 2,
+        (this.region.verticalBounds.min + this.region.verticalBounds.max) / 2,
+        0.51,
+      );
       mesh.userData.wallSegmentId = routeSegment.id;
       this.panels.set(routeSegment.id, mesh);
       this.scene.add(mesh);
@@ -366,27 +334,14 @@ class RouteVisualController {
     const center = box.getCenter(new THREE.Vector3());
     const size = box.getSize(new THREE.Vector3());
     this.controls.target.copy(center);
-    if (this.region) {
-      const halfVerticalFov = Math.tan(THREE.MathUtils.degToRad(this.camera.fov / 2));
-      const fitHeight = size.y / (2 * halfVerticalFov);
-      const fitWidth = size.x / (2 * halfVerticalFov * Math.max(this.camera.aspect, 0.5));
-      const distance = Math.max(fitHeight, fitWidth) * 1.08;
-      this.camera.position.set(center.x, center.y + size.y * 0.04, box.max.z + distance);
-      this.camera.near = Math.max(0.01, distance / 100);
-      this.camera.far = distance * 10;
-      this.camera.updateProjectionMatrix();
-    } else {
-      const surveyed = this.routeSegments.flatMap((item) => {
-        const segment = findSurvey(item.code);
-        return segment ? [segment] : [];
-      });
-      const direction = surveyed[0] ? segmentDirection(surveyed[0]) : new THREE.Vector3(1, 0, 0);
-      const normal = new THREE.Vector3(-direction.z, 0, direction.x);
-      this.camera.position
-        .copy(center)
-        .addScaledVector(normal, Math.max(6, size.length() * 1.25))
-        .add(new THREE.Vector3(0, 1.2, 0));
-    }
+    const halfVerticalFov = Math.tan(THREE.MathUtils.degToRad(this.camera.fov / 2));
+    const fitHeight = size.y / (2 * halfVerticalFov);
+    const fitWidth = size.x / (2 * halfVerticalFov * Math.max(this.camera.aspect, 0.5));
+    const distance = Math.max(fitHeight, fitWidth) * 1.08;
+    this.camera.position.set(center.x, center.y + size.y * 0.04, box.max.z + distance);
+    this.camera.near = Math.max(0.01, distance / 100);
+    this.camera.far = distance * 10;
+    this.camera.updateProjectionMatrix();
     this.camera.lookAt(center);
     this.controls.update();
   }
@@ -537,42 +492,13 @@ function makeMarker(label: string, role: RouteVisualPoint['role']) {
   return sprite;
 }
 
-function findSurvey(code?: string): WallSurveySegment | undefined {
-  return WALL_SURVEY_SEGMENTS.find((item) => item.code === code);
-}
-
-function segmentDirection(segment: WallSurveySegment) {
-  return new THREE.Vector3(
-    segment.end.xM - segment.start.xM,
-    0,
-    segment.end.zM - segment.start.zM,
-  ).normalize();
-}
-
-function segmentCenter(segment: WallSurveySegment) {
-  return new THREE.Vector3(
-    (segment.start.xM + segment.end.xM) / 2,
-    segment.heightMm / 2000,
-    (segment.start.zM + segment.end.zM) / 2,
-  );
-}
-
-function segmentYaw(segment: WallSurveySegment) {
-  const direction = segmentDirection(segment);
-  return Math.atan2(-direction.z, direction.x);
-}
-
-function legacyPointPosition(segment: WallSurveySegment, u: number, v: number) {
-  const direction = segmentDirection(segment);
-  const normal = new THREE.Vector3(-direction.z, 0, direction.x);
-  return new THREE.Vector3(segment.start.xM, (segment.heightMm / 1000) * (1 - v), segment.start.zM)
-    .addScaledVector(direction, (segment.widthMm / 1000) * u)
-    .addScaledVector(normal, 0.08);
-}
-
 function disposeObject(object: THREE.Object3D) {
   object.traverse((child) => {
-    if (!(child instanceof THREE.Mesh || child instanceof THREE.Line || child instanceof THREE.Sprite))
+    if (!(
+      child instanceof THREE.Mesh ||
+      child instanceof THREE.Line ||
+      child instanceof THREE.Sprite
+    ))
       return;
     if ('geometry' in child && child.geometry) child.geometry.dispose();
     const materials = Array.isArray(child.material) ? child.material : [child.material];

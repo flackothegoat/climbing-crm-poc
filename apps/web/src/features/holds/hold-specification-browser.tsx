@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   climbingColorCss,
   climbingColorLabel,
@@ -40,6 +40,7 @@ interface BrowserProps {
   specifications: HoldSpecification[];
   categoryActive: boolean;
   canAdjust: boolean;
+  initialExpandedId?: string;
   initializationBatch: HoldInitializationBatch | null;
   onChanged: () => Promise<void>;
 }
@@ -47,6 +48,9 @@ interface BrowserProps {
 export function HoldSpecificationBrowser(props: BrowserProps) {
   const [filters, setFilters] = useState(emptySpecificationFilters);
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  useEffect(() => {
+    if (props.initialExpandedId) setExpandedId(props.initialExpandedId);
+  }, [props.initialExpandedId]);
   const visibleItems = useMemo(
     () => filterHoldSpecifications(props.specifications, filters),
     [filters, props.specifications],
