@@ -1901,10 +1901,6 @@
   font-size: 14px;
 }
 
-.hold-specification-form input[type='color'] {
-  padding: 4px;
-}
-
 .hold-specification-form footer {
   display: flex;
   justify-content: flex-end;
@@ -3211,10 +3207,6 @@
   }
 
   .hold-lifecycle-section > span {
-    width: 100%;
-  }
-
-  .hold-inline-form input[type='color'] {
     width: 100%;
   }
 

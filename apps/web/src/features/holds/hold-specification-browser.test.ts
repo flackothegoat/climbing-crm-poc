@@ -7,7 +7,7 @@ describe('filterHoldSpecifications', () => {
     buildSpecification({
       id: 'yellow-jug',
       productName: '三角大把手',
-      colorName: '黄色',
+      color: 'YELLOW',
       manufacturer: 'Rock',
       sizeClass: 'M',
       sku: 'ROCK-01',
@@ -16,7 +16,7 @@ describe('filterHoldSpecifications', () => {
     buildSpecification({
       id: 'purple-jug',
       productName: '长方形大把手',
-      colorName: '紫色',
+      color: 'PURPLE',
       manufacturer: 'EP',
       sizeClass: 'L',
       status: 'ARCHIVED',
@@ -35,7 +35,7 @@ describe('filterHoldSpecifications', () => {
   it('combines color, size, model and status filters', () => {
     const activeModel = filterHoldSpecifications(items, {
       ...emptySpecificationFilters,
-      color: '黄色',
+      color: 'YELLOW',
       size: 'M',
       model: 'WITH_MODEL',
       status: 'ACTIVE',
@@ -63,8 +63,7 @@ function buildSpecification(
     heightMm: null,
     depthMm: null,
     mountingType: 'BOLT_ON',
-    colorName: '绿色',
-    colorHex: '#00FF00',
+    color: 'GREEN',
     sku: null,
     status: 'ACTIVE',
     assets: [],

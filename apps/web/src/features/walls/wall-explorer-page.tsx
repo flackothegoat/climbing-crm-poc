@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { createSeedRouteSettingPlan } from '../route-setting/route-setting-demo-data';
 import type { ClimbingRoute } from '../route-setting/route-setting.types';
+import { climbingColorCss } from '../common/climbing-colors';
 import { PageHeading } from '../dashboard/page-components';
 import {
   buildMonthlyPerformance,
@@ -326,7 +327,7 @@ function W06Detail(props: {
               onClick={() => props.setSelectedRouteId(route.id)}
               type="button"
             >
-              <i className={styles[route.color]} />
+              <i style={{ background: climbingColorCss(route.color) }} />
               {route.name} · {route.grade}
             </button>
           ))}
@@ -458,7 +459,7 @@ function RouteComparison(props: {
               type="button"
             >
               <span>
-                <i className={styles[route.color]} />
+                <i style={{ background: climbingColorCss(route.color) }} />
                 <strong>{route.name}</strong>
                 <small>{route.grade}</small>
               </span>

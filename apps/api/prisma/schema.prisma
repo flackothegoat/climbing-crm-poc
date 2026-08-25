@@ -33,6 +33,20 @@ enum HoldStatus {
   ARCHIVED
 }
 
+enum ClimbingColor {
+  BLACK
+  WHITE
+  GRAY
+  RED
+  ORANGE
+  YELLOW
+  GREEN
+  BLUE
+  PURPLE
+  PINK
+  BROWN
+}
+
 enum HoldCategorySource {
   DEFAULT
   CUSTOM
@@ -167,6 +181,40 @@ enum RouteDataSource {
   IMPORTED
 }
 
+enum RoutePublicLinkStatus {
+  ACTIVE
+  REVOKED
+}
+
+enum RouteFeedbackOutcome {
+  COMPLETED
+  ATTEMPTING
+}
+
+enum RouteDifficultyVote {
+  EASIER
+  AS_EXPECTED
+  HARDER
+}
+
+enum RouteEnjoymentVote {
+  DISLIKE
+  NEUTRAL
+  LIKE
+}
+
+enum RouteVisualAnnotationStatus {
+  DRAFT
+  CONFIRMED
+  RETIRED
+}
+
+enum RouteVisualAnnotationSource {
+  MANUAL
+  AI_SUGGESTED
+  IMPORTED
+}
+
 enum RoutePlacementRole {
   START
   NORMAL
@@ -280,6 +328,10 @@ model Account {
   completedHoldInitializations     HoldInitializationBatch[] @relation("HoldInitializationCompleter")
   createdHoldInitializationEntries HoldInitializationEntry[] @relation("HoldInitializationEntryCreator")
   createdRouteVersions             RouteVersion[]            @relation("RouteVersionCreator")
+  createdRoutePublicLinks          RoutePublicLink[]         @relation("RoutePublicLinkCreator")
+  createdRoutePhotos               RoutePhoto[]              @relation("RoutePhotoCreator")
+  createdRouteVisualAnnotations    RouteVisualAnnotation[]   @relation("RouteVisualAnnotationCreator")
+  confirmedRouteVisualAnnotations  RouteVisualAnnotation[]   @relation("RouteVisualAnnotationConfirmer")
   createdClimbObservations         ClimbObservation[]        @relation("ClimbObservationCreator")
   createdWallGeometryVersions      WallGeometryVersion[]     @relation("WallGeometryVersionCreator")
   createdWallAssets                WallAsset[]               @relation("WallAssetCreator")
@@ -319,25 +371,31 @@ model Organization {
   wallSettingReservations   WallSettingJobHoldReservation[]
   routeVersionWallSegments  RouteVersionWallSegment[]
   routePlacementAnchors     RouteHoldPlacementAnchor[]
+  routePublicLinks          RoutePublicLink[]
+  routeFeedback             RouteFeedback[]
+  routePhotos               RoutePhoto[]
+  routeVisualAnnotations    RouteVisualAnnotation[]
+  routeVisualPoints         RouteVisualPoint[]
   holdInstallationAnchors   HoldInstallationAnchor[]
   createdAt                 DateTime                        @default(now())
   updatedAt                 DateTime                        @updatedAt
 }
 
 model Membership {
-  id             String           @id @default(cuid())
-  accountId      String
-  organizationId String
-  role           MembershipRole
-  status         MembershipStatus @default(ACTIVE)
-  displayName    String?
-  jobTitle       String?
-  responsibility String?
-  account        Account          @relation(fields: [accountId], references: [id], onDelete: Restrict)
-  organization   Organization     @relation(fields: [organizationId], references: [id], onDelete: Restrict)
-  sessions       AuthSession[]
-  createdAt      DateTime         @default(now())
-  updatedAt      DateTime         @updatedAt
+  id               String           @id @default(cuid())
+  accountId        String
+  organizationId   String
+  role             MembershipRole
+  status           MembershipStatus @default(ACTIVE)
+  displayName      String?
+  jobTitle         String?
+  responsibility   String?
+  account          Account          @relation(fields: [accountId], references: [id], onDelete: Restrict)
+  organization     Organization     @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  sessions         AuthSession[]
+  setRouteVersions RouteVersion[]   @relation("RouteVersionSetter")
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
 
   @@unique([accountId, organizationId])
   @@index([organizationId])
@@ -437,12 +495,10 @@ model HoldModel {
 model HoldVariant {
   id                      String                          @id @default(cuid())
   holdModelId             String
-  colorName               String
-  colorHex                String
+  color                   ClimbingColor
   sku                     String?
   status                  HoldStatus                      @default(ACTIVE)
-  colorKey                String
-  activeColorKey          String?
+  activeColor             ClimbingColor?
   deletedAt               DateTime?
   deletedByAccountId      String?
   deletionReason          String?
@@ -461,7 +517,7 @@ model HoldVariant {
   createdAt               DateTime                        @default(now())
   updatedAt               DateTime                        @updatedAt
 
-  @@unique([holdModelId, activeColorKey])
+  @@unique([holdModelId, activeColor])
   @@index([holdModelId])
   @@index([holdModelId, status])
   @@index([holdModelId, deletedAt])
@@ -638,6 +694,7 @@ model WallSegment {
   geometryVersions     WallGeometryVersion[]
   captureSegments      WallCaptureSegment[]
   routeVersionSegments RouteVersionWallSegment[]
+  routeVisualPoints    RouteVisualPoint[]
   settingJobSegments   WallSettingJobSegment[]
   adjacenciesAsA       WallSegmentAdjacency[]    @relation("WallSegmentAdjacencyA")
   adjacenciesAsB       WallSegmentAdjacency[]    @relation("WallSegmentAdjacencyB")
@@ -702,13 +759,19 @@ model Route {
   organizationId    String
   code              String
   name              String
-  displayColor      String
+  color             ClimbingColor
   grade             String
   status            RouteStatus        @default(DRAFT)
   dataSource        RouteDataSource    @default(MANUAL)
+  description       String?
+  expectedRetireAt  DateTime?
+  publishedAt       DateTime?
+  retiredAt         DateTime?
   organization      Organization       @relation(fields: [organizationId], references: [id], onDelete: Restrict)
   versions          RouteVersion[]
   climbObservations ClimbObservation[]
+  publicLinks       RoutePublicLink[]
+  feedback          RouteFeedback[]
   createdAt         DateTime           @default(now())
   updatedAt         DateTime           @updatedAt
 
@@ -724,22 +787,143 @@ model RouteVersion {
   status             RouteVersionStatus        @default(DRAFT)
   dataSource         RouteDataSource           @default(MANUAL)
   note               String?
+  color              ClimbingColor?
+  grade              String?
+  gradeSystem        String?
+  styleTags          String[]                  @default([])
+  setterMembershipId String?
+  publishedAt        DateTime?
+  retiredAt          DateTime?
   createdByAccountId String
   settingJobId       String?
   organization       Organization              @relation(fields: [organizationId], references: [id], onDelete: Restrict)
   route              Route                     @relation(fields: [routeId], references: [id], onDelete: Restrict)
   createdBy          Account                   @relation("RouteVersionCreator", fields: [createdByAccountId], references: [id], onDelete: Restrict)
+  setter             Membership?               @relation("RouteVersionSetter", fields: [setterMembershipId], references: [id], onDelete: Restrict)
   settingJob         WallSettingJob?           @relation(fields: [settingJobId], references: [id], onDelete: Restrict)
   placements         RouteHoldPlacement[]
   climbObservations  ClimbObservation[]
   wallSegments       RouteVersionWallSegment[]
   installations      HoldInstallation[]
+  feedback           RouteFeedback[]
+  photo              RoutePhoto?
+  visualAnnotations  RouteVisualAnnotation[]
   createdAt          DateTime                  @default(now())
   updatedAt          DateTime                  @updatedAt
 
   @@unique([routeId, versionNumber])
   @@index([organizationId, status, updatedAt])
   @@index([settingJobId])
+  @@index([setterMembershipId])
+}
+
+model RoutePublicLink {
+  id                 String                @id @default(cuid())
+  organizationId     String
+  routeId            String
+  tokenHash          String                @unique
+  status             RoutePublicLinkStatus @default(ACTIVE)
+  activeRouteKey     String?               @unique
+  createdByAccountId String
+  revokedAt          DateTime?
+  organization       Organization          @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  route              Route                 @relation(fields: [routeId], references: [id], onDelete: Restrict)
+  createdBy          Account               @relation("RoutePublicLinkCreator", fields: [createdByAccountId], references: [id], onDelete: Restrict)
+  feedback           RouteFeedback[]
+  createdAt          DateTime              @default(now())
+  updatedAt          DateTime              @updatedAt
+
+  @@index([organizationId, status])
+  @@index([routeId, status])
+}
+
+model RouteFeedback {
+  id                  String               @id @default(cuid())
+  organizationId      String
+  routeId             String
+  routeVersionId      String
+  publicLinkId        String
+  outcome             RouteFeedbackOutcome
+  difficulty          RouteDifficultyVote
+  enjoyment           RouteEnjoymentVote
+  safetyConcern       Boolean              @default(false)
+  comment             String?
+  anonymousSessionKey String
+  requestKey          String
+  submittedAt         DateTime             @default(now())
+  organization        Organization         @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  route               Route                @relation(fields: [routeId], references: [id], onDelete: Restrict)
+  routeVersion        RouteVersion         @relation(fields: [routeVersionId], references: [id], onDelete: Restrict)
+  publicLink          RoutePublicLink      @relation(fields: [publicLinkId], references: [id], onDelete: Restrict)
+  createdAt           DateTime             @default(now())
+
+  @@unique([organizationId, requestKey])
+  @@index([organizationId, submittedAt])
+  @@index([routeId, submittedAt])
+  @@index([routeVersionId, submittedAt])
+  @@index([anonymousSessionKey, routeVersionId, submittedAt])
+}
+
+model RoutePhoto {
+  id                 String       @id @default(cuid())
+  organizationId     String
+  routeVersionId     String       @unique
+  objectKey          String       @unique
+  originalFileName   String
+  contentType        String
+  sizeBytes          Int
+  checksumSha256     String
+  createdByAccountId String
+  organization       Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  routeVersion       RouteVersion @relation(fields: [routeVersionId], references: [id], onDelete: Restrict)
+  createdBy          Account      @relation("RoutePhotoCreator", fields: [createdByAccountId], references: [id], onDelete: Restrict)
+  createdAt          DateTime     @default(now())
+  updatedAt          DateTime     @updatedAt
+
+  @@index([organizationId, createdAt])
+}
+
+model RouteVisualAnnotation {
+  id                    String                      @id @default(cuid())
+  organizationId        String
+  routeVersionId        String
+  revision              Int
+  status                RouteVisualAnnotationStatus @default(DRAFT)
+  source                RouteVisualAnnotationSource @default(MANUAL)
+  activeRouteVersionKey String?                     @unique
+  createdByAccountId    String
+  confirmedByAccountId  String?
+  confirmedAt           DateTime?
+  organization          Organization                @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  routeVersion          RouteVersion                @relation(fields: [routeVersionId], references: [id], onDelete: Restrict)
+  createdBy             Account                     @relation("RouteVisualAnnotationCreator", fields: [createdByAccountId], references: [id], onDelete: Restrict)
+  confirmedBy           Account?                    @relation("RouteVisualAnnotationConfirmer", fields: [confirmedByAccountId], references: [id], onDelete: Restrict)
+  points                RouteVisualPoint[]
+  createdAt             DateTime                    @default(now())
+  updatedAt             DateTime                    @updatedAt
+
+  @@unique([routeVersionId, revision])
+  @@index([organizationId, status, updatedAt])
+  @@index([routeVersionId, status])
+}
+
+model RouteVisualPoint {
+  id             String                @id @default(cuid())
+  organizationId String
+  annotationId   String
+  wallSegmentId  String
+  ordinal        Int
+  role           RoutePlacementRole    @default(NORMAL)
+  uNormalized    Float
+  vNormalized    Float
+  organization   Organization          @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  annotation     RouteVisualAnnotation @relation(fields: [annotationId], references: [id], onDelete: Restrict)
+  wallSegment    WallSegment           @relation(fields: [wallSegmentId], references: [id], onDelete: Restrict)
+  createdAt      DateTime              @default(now())
+
+  @@unique([annotationId, ordinal])
+  @@index([organizationId, wallSegmentId])
+  @@index([wallSegmentId])
 }
 
 model RouteHoldPlacement {
@@ -999,17 +1183,17 @@ model WallSettingJobHoldReservation {
 }
 
 model RouteVersionWallSegment {
-  id                String              @id @default(cuid())
+  id                String               @id @default(cuid())
   organizationId    String
   routeVersionId    String
   wallSegmentId     String
-  geometryVersionId String
+  geometryVersionId String?
   ordinal           Int
-  organization      Organization        @relation(fields: [organizationId], references: [id], onDelete: Restrict)
-  routeVersion      RouteVersion        @relation(fields: [routeVersionId], references: [id], onDelete: Restrict)
-  wallSegment       WallSegment         @relation(fields: [wallSegmentId], references: [id], onDelete: Restrict)
-  geometryVersion   WallGeometryVersion @relation(fields: [geometryVersionId], references: [id], onDelete: Restrict)
-  createdAt         DateTime            @default(now())
+  organization      Organization         @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  routeVersion      RouteVersion         @relation(fields: [routeVersionId], references: [id], onDelete: Restrict)
+  wallSegment       WallSegment          @relation(fields: [wallSegmentId], references: [id], onDelete: Restrict)
+  geometryVersion   WallGeometryVersion? @relation(fields: [geometryVersionId], references: [id], onDelete: Restrict)
+  createdAt         DateTime             @default(now())
 
   @@unique([routeVersionId, wallSegmentId])
   @@unique([routeVersionId, ordinal])

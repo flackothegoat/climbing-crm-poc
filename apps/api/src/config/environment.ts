@@ -27,6 +27,7 @@ const environmentSchema = z
     MINIO_USE_SSL: booleanString.default(false),
     MINIO_ACCESS_KEY: z.string().min(1),
     MINIO_SECRET_KEY: z.string().min(8),
+    PUBLIC_LINK_SIGNING_KEY: z.string().min(32).optional(),
     MINIO_BUCKET: z.string().min(3).default('climbingapp-hold-assets'),
     SWAGGER_ENABLED: booleanString.optional(),
     OBJECT_STORAGE_REQUIRED: booleanString.default(false),
@@ -43,6 +44,7 @@ const environmentSchema = z
   })
   .transform((environment) => ({
     ...environment,
+    PUBLIC_LINK_SIGNING_KEY: environment.PUBLIC_LINK_SIGNING_KEY ?? environment.MINIO_SECRET_KEY,
     SWAGGER_ENABLED: environment.SWAGGER_ENABLED ?? environment.NODE_ENV !== 'production',
   }));
 

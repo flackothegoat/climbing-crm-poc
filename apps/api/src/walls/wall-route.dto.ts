@@ -1,4 +1,4 @@
-import { ClimbObservationOutcome, RoutePlacementRole } from '@prisma/client';
+import { ClimbObservationOutcome, ClimbingColor, RoutePlacementRole } from '@prisma/client';
 import { z } from 'zod';
 import { parseWithSchema } from '../common/zod-validation';
 
@@ -14,7 +14,7 @@ const isoDateTime = z.string().datetime({ offset: true });
 const routeSchema = z.object({
   id: code,
   name: z.string().trim().min(1).max(80),
-  color: z.string().trim().min(1).max(32),
+  color: z.nativeEnum(ClimbingColor),
   grade: z.string().trim().min(1).max(32),
 });
 

@@ -1,4 +1,9 @@
-import type { ClimbObservationOutcome, Prisma, RoutePlacementRole } from '@prisma/client';
+import {
+  ClimbingColor,
+  type ClimbObservationOutcome,
+  type Prisma,
+  type RoutePlacementRole,
+} from '@prisma/client';
 
 export const W06_AREA = {
   code: 'TIANYU-1F',
@@ -58,9 +63,9 @@ export const W06_HOLE_SEEDS = Array.from({ length: 28 * 21 }, (_, index) => {
 });
 
 export const W06_ROUTE_SEEDS = [
-  { code: 'route-green', name: '青苔', displayColor: 'green', grade: 'V2' },
-  { code: 'route-red', name: '赤脊', displayColor: 'red', grade: 'V4' },
-  { code: 'route-yellow', name: '暖光', displayColor: 'yellow', grade: 'V3' },
+  { code: 'route-green', name: '青苔', color: ClimbingColor.GREEN, grade: 'V2' },
+  { code: 'route-red', name: '赤脊', color: ClimbingColor.RED, grade: 'V4' },
+  { code: 'route-yellow', name: '暖光', color: ClimbingColor.YELLOW, grade: 'V3' },
 ] as const;
 
 const placementSeeds: Array<{

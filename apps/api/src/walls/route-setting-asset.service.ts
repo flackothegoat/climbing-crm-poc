@@ -57,11 +57,10 @@ export class RouteSettingAssetService {
         };
         return {
           assetId: variant.id,
-          label: `${variant.holdModel.name} · ${variant.colorName}`,
+          label: variant.holdModel.name,
           productName: variant.holdModel.name,
           manufacturer: variant.holdModel.brand,
-          colorName: variant.colorName,
-          colorHex: variant.colorHex,
+          color: variant.color,
           mountingType: variant.holdModel.mountingType,
           dimensionsMm: dimensions,
           collisionRadiusMm: Math.max(50, Math.hypot(dimensions.width, dimensions.height) / 2),

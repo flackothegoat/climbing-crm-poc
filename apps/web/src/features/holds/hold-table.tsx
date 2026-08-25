@@ -1,4 +1,5 @@
 import type { HoldCategory } from './hold-api';
+import { climbingColorCss, climbingColorLabel } from '../common/climbing-colors';
 import { gripEnglishLabel, gripLabel } from './hold-options';
 
 export function HoldTable(props: {
@@ -111,8 +112,8 @@ function SpecificationColors({ category }: { category: HoldCategory }) {
       {category.specifications.slice(0, 4).map((item) => (
         <i
           key={item.id}
-          style={{ background: item.colorHex }}
-          title={`${item.productName} · ${item.colorName}`}
+          style={{ background: climbingColorCss(item.color) }}
+          title={`${item.productName} · ${climbingColorLabel(item.color)}`}
         />
       ))}
       {category.specifications.length > 4 && <small>+{category.specifications.length - 4}</small>}

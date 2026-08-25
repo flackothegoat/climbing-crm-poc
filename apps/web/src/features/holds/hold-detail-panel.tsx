@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState, type ReactNode } from 'react';
+import { climbingColorCss, climbingColorLabel } from '../common/climbing-colors';
 import { getHoldCategory, type HoldCategoryDetail, type HoldInitializationBatch } from './hold-api';
 import { HoldCategoryLifecycleActions } from './hold-lifecycle-actions';
 import { HoldCategoryMetadataEditor } from './hold-metadata-editor';
@@ -182,11 +183,12 @@ function MovementTimeline(props: {
         <ol className="hold-movement-list">
           {props.category.movements.map((movement) => (
             <li key={movement.id} className={movement.reversed ? 'is-reversed' : ''}>
-              <i style={{ background: movement.specification.colorHex }} />
+              <i style={{ background: climbingColorCss(movement.specification.color) }} />
               <div>
                 <b>
                   {movementLabel[movement.type] ?? movement.type} ·{' '}
-                  {movement.specification.productName} / {movement.specification.colorName}
+                  {movement.specification.productName} /{' '}
+                  {climbingColorLabel(movement.specification.color)}
                   {movement.reversed && <em>已撤销</em>}
                 </b>
                 <span>

@@ -1,5 +1,5 @@
-import { RouteSettingStudio } from '../../../../features/route-setting/route-setting-studio';
+import { RouteOperationsPage } from '../../../../features/routes/route-operations-page';
 
 export default function RoutesPage() {
-  return <RouteSettingStudio />;
+  return <RouteOperationsPage />;
 }

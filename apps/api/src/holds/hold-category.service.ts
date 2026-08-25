@@ -293,8 +293,7 @@ const movementDetailsInclude = (organizationId: string) =>
   ({
     variant: {
       select: {
-        colorName: true,
-        colorHex: true,
+        color: true,
         holdModel: { select: { name: true } },
       },
     },
@@ -459,8 +458,7 @@ function toMovement(movement: MovementWithDetails) {
     occurredAt: movement.occurredAt.toISOString(),
     specification: {
       productName: movement.variant.holdModel.name,
-      colorName: movement.variant.colorName,
-      colorHex: movement.variant.colorHex,
+      color: movement.variant.color,
     },
     actorName: movement.actor.memberships[0]?.displayName ?? '岩馆员工',
     reversed: movement.reversedBy !== null,

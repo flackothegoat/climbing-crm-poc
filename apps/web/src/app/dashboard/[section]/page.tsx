@@ -13,7 +13,6 @@ const dummySections: Record<string, { title: string; description: string; icon: 
     description: '未来用于活动、会员触达和内容运营。',
     icon: 'marketing',
   },
-  data: { title: '数据', description: '未来用于运营指标、线路反馈和资产分析。', icon: 'data' },
   settings: {
     title: '设置',
     description: '未来用于岩馆资料、权限策略和系统参数配置。',

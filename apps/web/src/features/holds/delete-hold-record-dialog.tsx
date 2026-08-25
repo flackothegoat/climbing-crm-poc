@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { DialogShell } from '../common/dialog-shell';
+import { climbingColorLabel } from '../common/climbing-colors';
 import { permanentlyDeleteHoldSpecification, type HoldSpecification } from './hold-api';
 import { bucketLabel } from './hold-options';
 
@@ -40,7 +41,7 @@ export function DeleteHoldRecordDialog(props: {
   return (
     <DialogShell
       title="永久删除岩点档案"
-      description={`${props.specification.productName} · ${props.specification.colorName}`}
+      description={`${props.specification.productName} · ${climbingColorLabel(props.specification.color)}`}
       onClose={submitting ? () => undefined : props.onClose}
     >
       <form className="dialog-form hold-delete-form" onSubmit={submit}>

@@ -1,5 +1,6 @@
 import { W06_HOLES } from '../walls/w06-wall-data';
 import type { WallHole } from '../walls/wall.types';
+import { climbingColorLabel } from '../common/climbing-colors';
 import type {
   HoldAssetDefinition,
   PlacementCollision,
@@ -197,7 +198,7 @@ function placementCsvRow(
   return [
     plan.wall.code,
     route?.name ?? placement.routeId,
-    asset?.colorName ?? '',
+    asset ? climbingColorLabel(asset.color) : '',
     placement.holeId,
     mount.matchedHoles.map((item) => item.holeId).join('|'),
     asset?.mountPattern.type ?? '',

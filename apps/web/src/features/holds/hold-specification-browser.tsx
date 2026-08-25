@@ -1,6 +1,11 @@
 'use client';
 
 import { useMemo, useState } from 'react';
+import {
+  climbingColorCss,
+  climbingColorLabel,
+  type ClimbingColor,
+} from '../common/climbing-colors';
 import type { HoldInitializationBatch, HoldSpecification } from './hold-api';
 import { AttachHoldModelDialog } from './attach-hold-model-dialog';
 import { HoldInitializationForm } from './hold-initialization-form';
@@ -160,7 +165,9 @@ function FilterSelect(props: {
     >
       <option value="">{props.label}</option>
       {props.options.map((option) => (
-        <option key={option}>{option}</option>
+        <option key={option} value={option}>
+          {props.label === '全部颜色' ? climbingColorLabel(option as ClimbingColor) : option}
+        </option>
       ))}
     </select>
   );
@@ -250,14 +257,17 @@ function ModelPlaceholder(props: { active: boolean; onAdd: () => void }) {
 function SpecificationHeader({ specification }: { specification: HoldSpecification }) {
   return (
     <header>
-      <span className="hold-color-swatch" style={{ background: specification.colorHex }} />
+      <span
+        className="hold-color-swatch"
+        style={{ background: climbingColorCss(specification.color) }}
+      />
       <div>
         <b>
           {specification.productName}
           {specification.status === 'ARCHIVED' && <em>已停用</em>}
         </b>
         <small>
-          {specification.colorName} · {specification.manufacturer ?? '品牌未填'}
+          {climbingColorLabel(specification.color)} · {specification.manufacturer ?? '品牌未填'}
         </small>
       </div>
       <strong>{specification.inventory.totalQuantity} 件</strong>
@@ -308,13 +318,13 @@ export function filterHoldSpecifications(
   const query = normalize(filters.query);
   return items.filter((item) => {
     const searchable = normalize(
-      [item.productName, item.colorName, item.manufacturer, item.sku, item.style]
+      [item.productName, climbingColorLabel(item.color), item.manufacturer, item.sku, item.style]
         .filter(Boolean)
         .join(' '),
     );
     return (
       (!query || searchable.includes(query)) &&
-      (!filters.color || item.colorName === filters.color) &&
+      (!filters.color || item.color === filters.color) &&
       (!filters.size || item.sizeClass === filters.size) &&
       (!filters.manufacturer || item.manufacturer === filters.manufacturer) &&
       matchesModel(item, filters.model) &&
@@ -334,7 +344,7 @@ function hasModelAsset(specification: HoldSpecification): boolean {
 
 function buildFilterOptions(items: HoldSpecification[]) {
   return {
-    colors: unique(items.map((item) => item.colorName)),
+    colors: unique(items.map((item) => item.color)),
     sizes: unique(items.map((item) => item.sizeClass)),
     manufacturers: unique(
       items.map((item) => item.manufacturer).filter((value): value is string => Boolean(value)),

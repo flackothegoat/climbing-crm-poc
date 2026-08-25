@@ -1,11 +1,11 @@
 import type { WallCalibration, WallDefinition } from '../walls/wall.types';
+import type { ClimbingColor } from '../common/climbing-colors';
 
 export type RouteSettingView = 'front' | 'perspective';
 
 export interface HoldAssetDefinition {
   assetId: string;
-  colorHex: string;
-  colorName: string;
+  color: ClimbingColor;
   collisionRadiusMm: number;
   dimensionsMm: { depth: number; height: number; width: number };
   label: string;
@@ -34,7 +34,7 @@ export interface PlacementMountMatch {
 }
 
 export interface ClimbingRoute {
-  color: string;
+  color: ClimbingColor;
   grade: string;
   id: string;
   name: string;

@@ -1,3 +1,4 @@
+import { ClimbingColor } from '@prisma/client';
 import { describe, expect, it } from 'vitest';
 import { parseCreateObservation, parseSaveRouteSettingPlan } from './wall-route.dto';
 
@@ -9,7 +10,7 @@ describe('墙面线路 DTO', () => {
         settingJobId: 'job-1',
         revision: 0,
         wall: { code: 'W06' },
-        routes: [{ id: 'route-green', name: '青苔', color: 'green', grade: 'V2' }],
+        routes: [{ id: 'route-green', name: '青苔', color: ClimbingColor.GREEN, grade: 'V2' }],
         placements: [
           {
             id: 'placement-1',
@@ -44,7 +45,7 @@ describe('墙面线路 DTO', () => {
         settingJobId: 'job-1',
         revision: 0,
         wall: { code: 'W06' },
-        routes: [{ id: 'route-empty', name: '空线路', color: '#00aa88', grade: 'V2' }],
+        routes: [{ id: 'route-empty', name: '空线路', color: ClimbingColor.GREEN, grade: 'V2' }],
         placements: [],
         updatedAt: '2026-08-06T10:00:00+08:00',
       }),

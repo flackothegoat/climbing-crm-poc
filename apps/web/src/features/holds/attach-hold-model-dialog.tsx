@@ -1,6 +1,7 @@
 'use client';
 
 import { DialogShell } from '../common/dialog-shell';
+import { climbingColorLabel } from '../common/climbing-colors';
 import {
   completeHoldModelAttachment,
   createHoldModelAttachment,
@@ -49,7 +50,7 @@ export function AttachHoldModelDialog(props: {
   return (
     <DialogShell
       title="补充 3D 扫描"
-      description={`模型将直接关联到“${props.specification.productName} · ${props.specification.colorName}”，库存和流水不会改变。`}
+      description={`模型将直接关联到“${props.specification.productName} · ${climbingColorLabel(props.specification.color)}”，库存和流水不会改变。`}
       onClose={() => void close()}
       wide
     >

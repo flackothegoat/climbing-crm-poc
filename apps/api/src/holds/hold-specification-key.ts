@@ -6,8 +6,6 @@ type ProductIdentity = Pick<
   'productName' | 'manufacturer' | 'sizeClass' | 'mountingType' | 'widthMm' | 'heightMm' | 'depthMm'
 >;
 
-type ColorIdentity = Pick<AddSpecificationInput, 'colorName' | 'colorHex'>;
-
 export function buildProductKey(input: ProductIdentity): string {
   return [
     input.manufacturer,
@@ -20,10 +18,6 @@ export function buildProductKey(input: ProductIdentity): string {
   ]
     .map(normalizeKeyPart)
     .join('|');
-}
-
-export function buildColorKey(input: ColorIdentity): string {
-  return [input.colorName, input.colorHex].map(normalizeKeyPart).join('|');
 }
 
 export function createInternalProductCode(): string {

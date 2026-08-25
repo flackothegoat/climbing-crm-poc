@@ -1,5 +1,11 @@
 import { BadRequestException } from '@nestjs/common';
-import { HoldGripType, HoldMountingType, HoldScanMode, HoldSizeClass } from '@prisma/client';
+import {
+  ClimbingColor,
+  HoldGripType,
+  HoldMountingType,
+  HoldScanMode,
+  HoldSizeClass,
+} from '@prisma/client';
 import { describe, expect, it } from 'vitest';
 import {
   parseAddSpecification,
@@ -44,10 +50,9 @@ describe('岩点参数校验', () => {
       manufacturer: 'Example Holds',
       sizeClass: HoldSizeClass.S,
       mountingType: HoldMountingType.BOLT_ON,
-      colorName: '黄色',
-      colorHex: '#d8f56c',
+      color: ClimbingColor.YELLOW,
     });
-    expect(result.colorHex).toBe('#D8F56C');
+    expect(result.color).toBe(ClimbingColor.YELLOW);
     expect(() => parseAddSpecification({ ...result, manufacturer: ' ' })).toThrow(
       BadRequestException,
     );

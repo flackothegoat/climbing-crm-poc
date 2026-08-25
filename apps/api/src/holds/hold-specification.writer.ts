@@ -7,11 +7,7 @@ import {
 } from '@prisma/client';
 import type { CurrentSession } from '../auth/session.service';
 import type { AddSpecificationInput } from './hold.dto';
-import {
-  buildColorKey,
-  buildProductKey,
-  createInternalProductCode,
-} from './hold-specification-key';
+import { buildProductKey, createInternalProductCode } from './hold-specification-key';
 
 @Injectable()
 export class HoldSpecificationWriter {
@@ -26,10 +22,8 @@ export class HoldSpecificationWriter {
     const variant = await transaction.holdVariant.create({
       data: {
         holdModelId: model.id,
-        colorName: input.colorName,
-        colorHex: input.colorHex,
-        colorKey: buildColorKey(input),
-        activeColorKey: buildColorKey(input),
+        color: input.color,
+        activeColor: input.color,
         sku: input.sku,
         inventory: { create: { verificationStatus: 'VERIFIED' } },
       },

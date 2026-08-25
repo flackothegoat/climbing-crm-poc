@@ -28,18 +28,96 @@ const checks = {
     SELECT COUNT(*)::int AS count
     FROM "RouteVersion" version
     JOIN "Route" route ON route."id" = version."routeId"
+    LEFT JOIN "Membership" setter ON setter."id" = version."setterMembershipId"
     WHERE route."organizationId" <> version."organizationId"
+       OR (version."setterMembershipId" IS NOT NULL AND (
+         setter."id" IS NULL OR setter."organizationId" <> version."organizationId"
+       ))
   `,
   routeSegmentScopeMismatch: `
     SELECT COUNT(*)::int AS count
     FROM "RouteVersionWallSegment" scope
     JOIN "RouteVersion" version ON version."id" = scope."routeVersionId"
     JOIN "WallSegment" segment ON segment."id" = scope."wallSegmentId"
-    JOIN "WallGeometryVersion" geometry ON geometry."id" = scope."geometryVersionId"
+    LEFT JOIN "WallGeometryVersion" geometry ON geometry."id" = scope."geometryVersionId"
     WHERE version."organizationId" <> scope."organizationId"
        OR segment."organizationId" <> scope."organizationId"
-       OR geometry."organizationId" <> scope."organizationId"
-       OR geometry."wallSegmentId" <> scope."wallSegmentId"
+       OR (scope."geometryVersionId" IS NOT NULL AND (
+         geometry."id" IS NULL
+         OR geometry."organizationId" <> scope."organizationId"
+         OR geometry."wallSegmentId" <> scope."wallSegmentId"
+       ))
+  `,
+  routePublicLinkScopeMismatch: `
+    SELECT COUNT(*)::int AS count
+    FROM "RoutePublicLink" link
+    JOIN "Route" route ON route."id" = link."routeId"
+    WHERE route."organizationId" <> link."organizationId"
+       OR NOT EXISTS (
+         SELECT 1 FROM "Membership" membership
+         WHERE membership."accountId" = link."createdByAccountId"
+           AND membership."organizationId" = link."organizationId"
+       )
+       OR (link."status" = 'ACTIVE' AND (
+         link."activeRouteKey" IS NULL OR link."revokedAt" IS NOT NULL
+       ))
+       OR (link."status" = 'REVOKED' AND (
+         link."activeRouteKey" IS NOT NULL OR link."revokedAt" IS NULL
+       ))
+  `,
+  routeFeedbackScopeMismatch: `
+    SELECT COUNT(*)::int AS count
+    FROM "RouteFeedback" feedback
+    JOIN "Route" route ON route."id" = feedback."routeId"
+    JOIN "RouteVersion" version ON version."id" = feedback."routeVersionId"
+    JOIN "RoutePublicLink" link ON link."id" = feedback."publicLinkId"
+    WHERE route."organizationId" <> feedback."organizationId"
+       OR version."organizationId" <> feedback."organizationId"
+       OR version."routeId" <> feedback."routeId"
+       OR link."organizationId" <> feedback."organizationId"
+       OR link."routeId" <> feedback."routeId"
+  `,
+  routePhotoScopeMismatch: `
+    SELECT COUNT(*)::int AS count
+    FROM "RoutePhoto" photo
+    JOIN "RouteVersion" version ON version."id" = photo."routeVersionId"
+    WHERE version."organizationId" <> photo."organizationId"
+       OR NOT EXISTS (
+         SELECT 1 FROM "Membership" membership
+         WHERE membership."accountId" = photo."createdByAccountId"
+           AND membership."organizationId" = photo."organizationId"
+       )
+  `,
+  routeVisualAnnotationScopeMismatch: `
+    SELECT COUNT(*)::int AS count
+    FROM "RouteVisualAnnotation" annotation
+    JOIN "RouteVersion" version ON version."id" = annotation."routeVersionId"
+    WHERE version."organizationId" <> annotation."organizationId"
+       OR NOT EXISTS (
+         SELECT 1 FROM "Membership" membership
+         WHERE membership."accountId" = annotation."createdByAccountId"
+           AND membership."organizationId" = annotation."organizationId"
+       )
+       OR (annotation."confirmedByAccountId" IS NOT NULL AND NOT EXISTS (
+         SELECT 1 FROM "Membership" membership
+         WHERE membership."accountId" = annotation."confirmedByAccountId"
+           AND membership."organizationId" = annotation."organizationId"
+       ))
+       OR (annotation."status" = 'CONFIRMED' AND annotation."activeRouteVersionKey" <> annotation."routeVersionId")
+  `,
+  routeVisualPointScopeMismatch: `
+    SELECT COUNT(*)::int AS count
+    FROM "RouteVisualPoint" point
+    JOIN "RouteVisualAnnotation" annotation ON annotation."id" = point."annotationId"
+    JOIN "WallSegment" segment ON segment."id" = point."wallSegmentId"
+    WHERE annotation."organizationId" <> point."organizationId"
+       OR segment."organizationId" <> point."organizationId"
+       OR NOT EXISTS (
+         SELECT 1 FROM "RouteVersionWallSegment" scope
+         WHERE scope."routeVersionId" = annotation."routeVersionId"
+           AND scope."wallSegmentId" = point."wallSegmentId"
+           AND scope."organizationId" = point."organizationId"
+       )
   `,
   placementScopeMismatch: `
     SELECT COUNT(*)::int AS count
@@ -90,6 +168,12 @@ const checks = {
     FROM "HoldInventoryBalance"
     WHERE "warehouseQuantity" < 0 OR "installedQuantity" < 0
        OR "reservedQuantity" < 0 OR "maintenanceQuantity" < 0
+  `,
+  holdVariantColorLifecycleMismatch: `
+    SELECT COUNT(*)::int AS count
+    FROM "HoldVariant"
+    WHERE ("deletedAt" IS NULL AND "activeColor" IS DISTINCT FROM "color")
+       OR ("deletedAt" IS NOT NULL AND "activeColor" IS NOT NULL)
   `,
   wallSettingReservationScopeMismatch: `
     SELECT COUNT(*)::int AS count

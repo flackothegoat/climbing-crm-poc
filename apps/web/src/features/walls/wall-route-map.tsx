@@ -1,12 +1,7 @@
 import { W06_HOLES } from './w06-wall-data';
 import type { RouteSettingPlan } from '../route-setting/route-setting.types';
+import { climbingColorCss } from '../common/climbing-colors';
 import styles from './walls.module.css';
-
-const routeColors = {
-  green: '#27a96e',
-  red: '#e5535f',
-  yellow: '#eab728',
-} as const;
 
 export function WallRouteMap(props: { plan: RouteSettingPlan; selectedRouteId: string | null }) {
   return (
@@ -113,8 +108,4 @@ function findHole(holeId: string) {
   return W06_HOLES.find((hole) => hole.id === holeId);
 }
 
-function routeColor(color: string): string {
-  return color.startsWith('#')
-    ? color
-    : (routeColors[color as keyof typeof routeColors] ?? '#17715a');
-}
+const routeColor = climbingColorCss;

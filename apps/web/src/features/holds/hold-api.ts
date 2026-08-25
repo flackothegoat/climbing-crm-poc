@@ -1,4 +1,5 @@
 import { apiRequest, apiRequestBlob } from '../../lib/api';
+import type { ClimbingColor } from '../common/climbing-colors';
 
 export type HoldStatus = 'ACTIVE' | 'ARCHIVED';
 export type HoldCategorySource = 'DEFAULT' | 'CUSTOM';
@@ -50,8 +51,7 @@ export interface HoldSpecification {
   heightMm: number | null;
   depthMm: number | null;
   mountingType: HoldMountingType;
-  colorName: string;
-  colorHex: string;
+  color: ClimbingColor;
   sku: string | null;
   status: HoldStatus;
   assets: HoldAsset[];
@@ -85,7 +85,7 @@ export interface HoldMovement {
   afterQuantity: number;
   note: string | null;
   occurredAt: string;
-  specification: { productName: string; colorName: string; colorHex: string };
+  specification: { productName: string; color: ClimbingColor };
   actorName: string;
   reversed: boolean;
   reversalOfMovementId: string | null;
@@ -152,8 +152,7 @@ export interface HoldSpecificationInput {
   heightMm?: number | null;
   depthMm?: number | null;
   mountingType: HoldMountingType;
-  colorName: string;
-  colorHex: string;
+  color: ClimbingColor;
   sku?: string | null;
 }
 

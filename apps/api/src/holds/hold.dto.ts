@@ -1,5 +1,6 @@
 import { parseWithSchema } from '../common/zod-validation';
 import {
+  ClimbingColor,
   HoldGripType,
   HoldAssetKind,
   HoldMountingType,
@@ -27,12 +28,6 @@ const categoryCode = z
   .min(1)
   .max(32)
   .regex(/^[A-Z0-9_-]+$/, '编号只能包含字母、数字、横线和下划线');
-const colorHex = z
-  .string()
-  .trim()
-  .toUpperCase()
-  .regex(/^#[0-9A-F]{6}$/, '颜色值必须使用 #RRGGBB 格式');
-
 const createCategorySchema = z.object({
   code: categoryCode,
   name: z.string().trim().min(1).max(80),
@@ -54,8 +49,7 @@ const specificationSchema = z.object({
   heightMm: positiveDimension,
   depthMm: positiveDimension,
   mountingType: z.nativeEnum(HoldMountingType),
-  colorName: z.string().trim().min(1).max(40),
-  colorHex,
+  color: z.nativeEnum(ClimbingColor),
   sku: optionalText(64),
 });
 

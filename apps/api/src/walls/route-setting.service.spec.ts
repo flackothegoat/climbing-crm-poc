@@ -1,4 +1,5 @@
 import {
+  ClimbingColor,
   MembershipRole,
   PlacementAnchorRole,
   RouteStatus,
@@ -25,7 +26,7 @@ const input: SaveRouteSettingPlanInput = {
   settingJobId: 'job-1',
   revision: 0,
   wall: { code: 'W06' },
-  routes: [{ id: 'route-green', name: '青苔', color: 'green', grade: 'V2' }],
+  routes: [{ id: 'route-green', name: '青苔', color: ClimbingColor.GREEN, grade: 'V2' }],
   placements: [
     {
       id: 'client-placement-1',

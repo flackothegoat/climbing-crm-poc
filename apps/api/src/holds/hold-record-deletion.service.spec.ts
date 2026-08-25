@@ -1,5 +1,6 @@
 import { ConflictException, ForbiddenException } from '@nestjs/common';
 import {
+  ClimbingColor,
   HoldAssetKind,
   HoldStatus,
   InventoryBucket,
@@ -16,12 +17,10 @@ import { HoldRecordDeletionService } from './hold-record-deletion.service';
 const record = {
   id: 'variant-1',
   holdModelId: 'model-1',
-  colorName: '黄色',
-  colorHex: '#F1D94A',
+  color: ClimbingColor.YELLOW,
   sku: 'YELLOW-1',
   status: HoldStatus.ACTIVE,
-  colorKey: 'yellow-key',
-  activeColorKey: 'yellow-key',
+  activeColor: ClimbingColor.YELLOW,
   deletedAt: null,
   deletedByAccountId: null,
   deletionReason: null,
@@ -139,7 +138,7 @@ describe('HoldRecordDeletionService', () => {
       where: { id: 'variant-1' },
       data: expect.objectContaining({
         deletedByAccountId: 'owner-1',
-        activeColorKey: null,
+        activeColor: null,
         deletionSnapshot: expect.any(Object),
       }),
     });

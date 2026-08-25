@@ -9,8 +9,7 @@ import { W06_CALIBRATION, W06_WALL, w06HoleId } from '../walls/w06-wall-data';
 export const HOLD_ASSETS: Record<string, HoldAssetDefinition> = {
   green: {
     assetId: 'test-green',
-    colorHex: '#22a868',
-    colorName: '绿色',
+    color: 'GREEN',
     draggable: true,
     disabledReason: null,
     warehouseQuantity: 99,
@@ -30,8 +29,7 @@ export const HOLD_ASSETS: Record<string, HoldAssetDefinition> = {
   },
   red: {
     assetId: 'test-red',
-    colorHex: '#ef4050',
-    colorName: '红色',
+    color: 'RED',
     draggable: true,
     disabledReason: null,
     warehouseQuantity: 99,
@@ -51,8 +49,7 @@ export const HOLD_ASSETS: Record<string, HoldAssetDefinition> = {
   },
   yellow: {
     assetId: 'test-yellow',
-    colorHex: '#f0b415',
-    colorName: '黄色',
+    color: 'YELLOW',
     draggable: true,
     disabledReason: null,
     warehouseQuantity: 99,
@@ -73,9 +70,9 @@ export const HOLD_ASSETS: Record<string, HoldAssetDefinition> = {
 };
 
 const routes: ClimbingRoute[] = [
-  { id: 'route-green', name: '青苔', color: 'green', grade: 'V2' },
-  { id: 'route-red', name: '赤脊', color: 'red', grade: 'V4' },
-  { id: 'route-yellow', name: '暖光', color: 'yellow', grade: 'V3' },
+  { id: 'route-green', name: '青苔', color: 'GREEN', grade: 'V2' },
+  { id: 'route-red', name: '赤脊', color: 'RED', grade: 'V4' },
+  { id: 'route-yellow', name: '暖光', color: 'YELLOW', grade: 'V3' },
 ];
 
 const placementSeeds: Array<[string, number, number, number]> = [

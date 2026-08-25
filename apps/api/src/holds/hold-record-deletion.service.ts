@@ -99,7 +99,7 @@ export class HoldRecordDeletionService {
       where: { id: record.id },
       data: {
         status: HoldStatus.ARCHIVED,
-        activeColorKey: null,
+        activeColor: null,
         deletedAt: plan.deletedAt,
         deletedByAccountId: session.account.id,
         deletionReason: input.reason,
@@ -258,9 +258,7 @@ function buildDeletionSnapshot(
     },
     specification: {
       id: record.id,
-      colorName: record.colorName,
-      colorHex: record.colorHex,
-      colorKey: record.colorKey,
+      color: record.color,
       sku: record.sku,
       status: record.status,
     },

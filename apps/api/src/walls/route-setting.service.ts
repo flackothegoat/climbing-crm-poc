@@ -245,7 +245,7 @@ async function upsertRoute(
       where: { id: existing.id },
       data: {
         name: input.name,
-        displayColor: input.color,
+        color: input.color,
         grade: input.grade,
         dataSource,
         status: existing.status === RouteStatus.INACTIVE ? RouteStatus.DRAFT : existing.status,
@@ -257,7 +257,7 @@ async function upsertRoute(
       organizationId,
       code: input.id,
       name: input.name,
-      displayColor: input.color,
+      color: input.color,
       grade: input.grade,
       status: RouteStatus.DRAFT,
       dataSource,
@@ -501,7 +501,7 @@ function mapRoutePlan(wall: WallWithRoutePlan, job?: SettingJobContext) {
     routes: versions.map((version) => ({
       id: version.route.code,
       name: version.route.name,
-      color: version.route.displayColor,
+      color: version.route.color,
       grade: version.route.grade,
     })),
     placements: versions.flatMap((version) =>

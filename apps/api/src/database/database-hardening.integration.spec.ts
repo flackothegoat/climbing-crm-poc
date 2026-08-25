@@ -68,10 +68,8 @@ describe.runIf(integrationEnabled)('PostgreSQL 领域约束集成检查', () => 
         const variant = await transaction.holdVariant.create({
           data: {
             holdModelId: model.id,
-            colorName: '灰色',
-            colorHex: '#888888',
-            colorKey: crypto.randomUUID(),
-            activeColorKey: crypto.randomUUID(),
+            color: 'GRAY',
+            activeColor: 'GRAY',
           },
         });
         const hole = await transaction.wallHole.create({
@@ -91,7 +89,7 @@ describe.runIf(integrationEnabled)('PostgreSQL 领域约束集成检查', () => 
             organizationId: wall.organizationId,
             code: `ROUTE-${crypto.randomUUID()}`,
             name: '集成测试线路',
-            displayColor: 'gray',
+            color: 'GRAY',
             grade: 'V1',
           },
         });
@@ -210,10 +208,8 @@ describe.runIf(integrationEnabled)('PostgreSQL 领域约束集成检查', () => 
         const variant = await transaction.holdVariant.create({
           data: {
             holdModelId: model.id,
-            colorName: '灰色',
-            colorHex: '#888888',
-            colorKey: crypto.randomUUID(),
-            activeColorKey: crypto.randomUUID(),
+            color: 'GRAY',
+            activeColor: 'GRAY',
           },
         });
         const job = await transaction.wallSettingJob.create({
@@ -234,6 +230,145 @@ describe.runIf(integrationEnabled)('PostgreSQL 领域约束集成检查', () => 
         });
       }),
     ).rejects.toThrow('WallSettingJobHoldReservation scope mismatch');
+  });
+
+  it('数据库拒绝二维码反馈跨线路版本或跨岩馆归属', async () => {
+    await expect(
+      prisma.$transaction(async (transaction) => {
+        const first = await createWallFixture(transaction, 'feedback-first');
+        const second = await createWallFixture(transaction, 'feedback-second');
+        const account = await transaction.account.create({
+          data: {
+            email: `integration-${crypto.randomUUID()}@example.com`,
+            passwordHash: 'integration-only',
+          },
+        });
+        await transaction.membership.create({
+          data: {
+            accountId: account.id,
+            organizationId: first.organizationId,
+            role: 'L1_ADMIN',
+          },
+        });
+        const firstRoute = await transaction.route.create({
+          data: {
+            organizationId: first.organizationId,
+            code: `ROUTE-${crypto.randomUUID()}`,
+            name: '第一岩馆线路',
+            color: 'GREEN',
+            grade: 'V3',
+            status: 'PUBLISHED',
+          },
+        });
+        const secondRoute = await transaction.route.create({
+          data: {
+            organizationId: second.organizationId,
+            code: `ROUTE-${crypto.randomUUID()}`,
+            name: '第二岩馆线路',
+            color: 'RED',
+            grade: 'V4',
+            status: 'PUBLISHED',
+          },
+        });
+        const secondVersion = await transaction.routeVersion.create({
+          data: {
+            organizationId: second.organizationId,
+            routeId: secondRoute.id,
+            versionNumber: 1,
+            status: 'PUBLISHED',
+            createdByAccountId: account.id,
+          },
+        });
+        const link = await transaction.routePublicLink.create({
+          data: {
+            organizationId: first.organizationId,
+            routeId: firstRoute.id,
+            tokenHash: crypto.randomUUID(),
+            activeRouteKey: firstRoute.id,
+            createdByAccountId: account.id,
+          },
+        });
+        await transaction.routeFeedback.create({
+          data: {
+            organizationId: first.organizationId,
+            routeId: firstRoute.id,
+            routeVersionId: secondVersion.id,
+            publicLinkId: link.id,
+            outcome: 'ATTEMPTING',
+            difficulty: 'AS_EXPECTED',
+            enjoyment: 'LIKE',
+            anonymousSessionKey: crypto.randomUUID(),
+            requestKey: crypto.randomUUID(),
+          },
+        });
+      }),
+    ).rejects.toThrow('RouteFeedback scope mismatch');
+  });
+
+  it('数据库拒绝把线路视觉点写到版本未关联或其他岩馆的墙段', async () => {
+    await expect(
+      prisma.$transaction(async (transaction) => {
+        const first = await createWallFixture(transaction, 'visual-first');
+        const second = await createWallFixture(transaction, 'visual-second');
+        const account = await transaction.account.create({
+          data: {
+            email: `integration-${crypto.randomUUID()}@example.com`,
+            passwordHash: 'integration-only',
+          },
+        });
+        await transaction.membership.create({
+          data: {
+            accountId: account.id,
+            organizationId: first.organizationId,
+            role: 'L1_ADMIN',
+          },
+        });
+        const route = await transaction.route.create({
+          data: {
+            organizationId: first.organizationId,
+            code: `ROUTE-${crypto.randomUUID()}`,
+            name: '视觉标注约束测试',
+            color: 'GREEN',
+            grade: 'V3',
+          },
+        });
+        const version = await transaction.routeVersion.create({
+          data: {
+            organizationId: first.organizationId,
+            routeId: route.id,
+            versionNumber: 1,
+            createdByAccountId: account.id,
+          },
+        });
+        await transaction.routeVersionWallSegment.create({
+          data: {
+            organizationId: first.organizationId,
+            routeVersionId: version.id,
+            wallSegmentId: first.wallSegmentId,
+            ordinal: 0,
+          },
+        });
+        const annotation = await transaction.routeVisualAnnotation.create({
+          data: {
+            organizationId: first.organizationId,
+            routeVersionId: version.id,
+            revision: 1,
+            createdByAccountId: account.id,
+          },
+        });
+        await transaction.routeVisualPoint.create({
+          data: {
+            organizationId: first.organizationId,
+            annotationId: annotation.id,
+            wallSegmentId: second.wallSegmentId,
+            ordinal: 0,
+            role: 'START',
+            uNormalized: 0.2,
+            vNormalized: 0.8,
+          },
+        });
+      }),
+    ).rejects.toThrow('RouteVisualPoint scope mismatch');
   });
 });
 
@@ -269,10 +404,8 @@ async function createPlacementFixture(transaction: Prisma.TransactionClient, suf
   const variant = await transaction.holdVariant.create({
     data: {
       holdModelId: model.id,
-      colorName: '灰色',
-      colorHex: '#888888',
-      colorKey: crypto.randomUUID(),
-      activeColorKey: crypto.randomUUID(),
+      color: 'GRAY',
+      activeColor: 'GRAY',
     },
   });
   const route = await transaction.route.create({
@@ -280,7 +413,7 @@ async function createPlacementFixture(transaction: Prisma.TransactionClient, suf
       organizationId: wall.organizationId,
       code: `ROUTE-${crypto.randomUUID()}`,
       name: '集成测试线路',
-      displayColor: 'gray',
+      color: 'GRAY',
       grade: 'V1',
     },
   });

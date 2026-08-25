@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, type FormEvent } from 'react';
+import { climbingColorOptions, type ClimbingColor } from '../common/climbing-colors';
 import type {
   HoldMountingType,
   HoldSizeClass,
@@ -16,8 +17,7 @@ interface SpecificationFormState {
   style: string;
   sizeClass: HoldSizeClass;
   mountingType: HoldMountingType;
-  colorName: string;
-  colorHex: string;
+  color: ClimbingColor;
   sku: string;
   widthMm: string;
   heightMm: string;
@@ -86,20 +86,12 @@ export function HoldSpecificationForm(props: {
           options={mountingOptions}
           onChange={(value) => update('mountingType', value as HoldMountingType)}
         />
-        <TextField
-          label="颜色名称"
-          required
-          value={form.colorName}
-          onChange={(value) => update('colorName', value)}
+        <SelectField
+          label="岩点颜色"
+          value={form.color}
+          options={climbingColorOptions.map(({ value, label }) => [value, label])}
+          onChange={(value) => update('color', value as ClimbingColor)}
         />
-        <label>
-          显示颜色
-          <input
-            type="color"
-            value={form.colorHex}
-            onChange={(event) => update('colorHex', event.target.value.toUpperCase())}
-          />
-        </label>
         <TextField
           label="供应商货号（可选）"
           value={form.sku}
@@ -201,8 +193,7 @@ function initialState(specification?: HoldSpecification): SpecificationFormState
     style: specification?.style ?? '',
     sizeClass: specification?.sizeClass ?? 'M',
     mountingType: specification?.mountingType ?? 'UNKNOWN',
-    colorName: specification?.colorName ?? '',
-    colorHex: specification?.colorHex ?? '#D8F56C',
+    color: specification?.color ?? 'YELLOW',
     sku: specification?.sku ?? '',
     widthMm: optionalString(specification?.widthMm),
     heightMm: optionalString(specification?.heightMm),

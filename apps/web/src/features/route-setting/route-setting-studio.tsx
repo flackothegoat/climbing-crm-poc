@@ -3,6 +3,7 @@
 import Image from 'next/image';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { PageHeading } from '../dashboard/page-components';
+import { climbingColorCss } from '../common/climbing-colors';
 import { W06_HOLES } from '../walls/w06-wall-data';
 import {
   cancelWallSettingJob,
@@ -212,7 +213,7 @@ export function RouteSettingStudio() {
             {
               id: routeId,
               name: `新线路 ${plan.routes.length + 1}`,
-              color: asset.colorHex,
+              color: asset.color,
               grade: '未定级',
             },
           ],
@@ -541,7 +542,10 @@ function HoldPalette(props: {
               {asset.previewUrl ? (
                 <Image alt="" height={96} src={asset.previewUrl} unoptimized width={96} />
               ) : (
-                <span className={styles.assetSwatch} style={{ background: asset.colorHex }} />
+                <span
+                  className={styles.assetSwatch}
+                  style={{ background: climbingColorCss(asset.color) }}
+                />
               )}
               <span>{asset.label}</span>
               <small>

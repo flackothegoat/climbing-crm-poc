@@ -1,4 +1,5 @@
 import {
+  ClimbingColor,
   HoldAssetKind,
   HoldAssetStatus,
   HoldGripType,
@@ -87,8 +88,7 @@ describe('HoldScanService', () => {
         manufacturer: '未知生产商',
         sizeClass: HoldSizeClass.M,
         mountingType: HoldMountingType.UNKNOWN,
-        colorName: '绿色',
-        colorHex: '#6BE56D',
+        color: ClimbingColor.GREEN,
       },
       inventory: { warehouseQuantity: 3, installedQuantity: 2 },
     });

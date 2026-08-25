@@ -12,7 +12,6 @@ import type {
 } from './hold.dto';
 import { HoldInitializationService } from './hold-initialization.service';
 import { inventoryTotal, toSpecification } from './hold.mapper';
-import { buildColorKey } from './hold-specification-key';
 import { HoldSpecificationWriter } from './hold-specification.writer';
 import { lockHoldOrganization } from './hold-transaction-lock';
 import { UNKNOWN_HOLD_MANUFACTURER } from './hold-domain.constants';
@@ -117,10 +116,8 @@ export class HoldSpecificationService {
           where: { id: specificationId },
           data: {
             holdModelId: targetModel.id,
-            colorName: merged.colorName,
-            colorHex: merged.colorHex,
-            colorKey: buildColorKey(merged),
-            activeColorKey: buildColorKey(merged),
+            color: merged.color,
+            activeColor: merged.color,
             sku: merged.sku,
           },
           include: { inventory: true },
@@ -287,8 +284,7 @@ function mergeSpecification(
     heightMm: input.heightMm === undefined ? source.holdModel.heightMm : input.heightMm,
     depthMm: input.depthMm === undefined ? source.holdModel.depthMm : input.depthMm,
     mountingType: input.mountingType ?? source.holdModel.mountingType,
-    colorName: input.colorName ?? source.colorName,
-    colorHex: input.colorHex ?? source.colorHex,
+    color: input.color ?? source.color,
     sku: input.sku === undefined ? source.sku : input.sku,
   };
 }
