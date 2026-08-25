@@ -42,6 +42,7 @@ import { HoldInitializationService } from './hold-initialization.service';
 import { HoldScanService } from './hold-scan.service';
 import { HoldSpecificationService } from './hold-specification.service';
 import { HoldRecordDeletionService } from './hold-record-deletion.service';
+import { HoldModelProcessingService } from './hold-model-processing.service';
 
 @ApiTags('holds')
 @ApiCookieAuth()
@@ -56,12 +57,31 @@ export class HoldController {
     private readonly assets: HoldAssetService,
     private readonly scans: HoldScanService,
     private readonly initialization: HoldInitializationService,
+    private readonly modelProcessing: HoldModelProcessingService,
   ) {}
 
   @Get('initialization/active')
   @ApiOperation({ summary: '获取当前进行中的全馆岩点初始化批次' })
   getActiveInitialization(@CurrentSessionContext() session: CurrentSession) {
     return this.initialization.getActive(session);
+  }
+
+  @Get('scans/:scanId/model-processing')
+  @ApiOperation({ summary: '获取扫描草稿的后台模型清理状态' })
+  getModelProcessing(
+    @CurrentSessionContext() session: CurrentSession,
+    @Param('scanId') scanId: string,
+  ) {
+    return this.modelProcessing.getForScan(session, scanId);
+  }
+
+  @Post('model-processing/:jobId/retry')
+  @ApiOperation({ summary: '重新排队失败的模型清理任务' })
+  retryModelProcessing(
+    @CurrentSessionContext() session: CurrentSession,
+    @Param('jobId') jobId: string,
+  ) {
+    return this.modelProcessing.retry(session, jobId);
   }
 
   @Post('initialization/batches')

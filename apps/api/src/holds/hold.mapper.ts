@@ -1,6 +1,7 @@
 import type {
   HoldInventoryBalance,
   HoldAsset,
+  HoldModelProcessingJob,
   HoldModel,
   HoldVariant,
   InventoryVerificationStatus,
@@ -9,7 +10,7 @@ import type {
 
 type VariantWithInventory = HoldVariant & {
   inventory: HoldInventoryBalance | null;
-  assets?: HoldAsset[];
+  assets?: Array<HoldAsset & { sourceProcessingJob?: HoldModelProcessingJob | null }>;
 };
 type ModelWithSpecifications = HoldModel & { variants: VariantWithInventory[] };
 export type CategoryWithSpecifications = Prisma.HoldCategoryGetPayload<{
@@ -59,9 +60,12 @@ export function toSpecification(model: HoldModel, variant: VariantWithInventory)
   };
 }
 
-function toAssetSummary(asset: HoldAsset) {
+function toAssetSummary(
+  asset: HoldAsset & { sourceProcessingJob?: HoldModelProcessingJob | null },
+) {
   return {
     id: asset.id,
+    scanId: asset.scanId,
     kind: asset.kind,
     status: asset.status,
     originalFileName: asset.originalFileName,
@@ -69,6 +73,21 @@ function toAssetSummary(asset: HoldAsset) {
     sizeBytes: asset.sizeBytes,
     metadata: asset.metadata,
     sourceAssetId: asset.sourceAssetId,
+    processingJob: asset.sourceProcessingJob
+      ? {
+          id: asset.sourceProcessingJob.id,
+          status: asset.sourceProcessingJob.status,
+          attemptCount: asset.sourceProcessingJob.attemptCount,
+          processorVersion: asset.sourceProcessingJob.processorVersion,
+          sourceAssetId: asset.sourceProcessingJob.sourceAssetId,
+          outputAssetId: asset.sourceProcessingJob.outputAssetId,
+          errorCode: asset.sourceProcessingJob.errorCode,
+          errorMessage: asset.sourceProcessingJob.errorMessage,
+          report: asset.sourceProcessingJob.report,
+          createdAt: asset.sourceProcessingJob.createdAt.toISOString(),
+          updatedAt: asset.sourceProcessingJob.updatedAt.toISOString(),
+        }
+      : null,
     createdAt: asset.createdAt.toISOString(),
   };
 }

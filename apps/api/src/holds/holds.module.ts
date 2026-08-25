@@ -5,6 +5,7 @@ import { HoldCategoryService } from './hold-category.service';
 import { HoldController } from './hold.controller';
 import { HoldInitializationService } from './hold-initialization.service';
 import { HoldInventoryService } from './hold-inventory.service';
+import { HoldModelProcessingService } from './hold-model-processing.service';
 import { HoldRecordDeletionService } from './hold-record-deletion.service';
 import { HoldScanService } from './hold-scan.service';
 import { HoldSpecificationService } from './hold-specification.service';
@@ -18,6 +19,7 @@ import { HoldSpecificationWriter } from './hold-specification.writer';
     HoldSpecificationService,
     HoldSpecificationWriter,
     HoldInventoryService,
+    HoldModelProcessingService,
     HoldAssetService,
     HoldInitializationService,
     HoldScanService,

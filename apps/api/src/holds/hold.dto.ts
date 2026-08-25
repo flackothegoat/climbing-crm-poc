@@ -134,7 +134,10 @@ const finalizeScanSchema = z.object({
 
 const uploadAssetKindSchema = z
   .nativeEnum(HoldAssetKind)
-  .refine((kind) => kind !== HoldAssetKind.MODEL_PREVIEW, '缩略图必须由三维模型派生');
+  .refine(
+    (kind) => kind !== HoldAssetKind.MODEL_PREVIEW && kind !== HoldAssetKind.MODEL_3D,
+    '展示模型与缩略图必须由原始模型派生',
+  );
 const previewGenerationVersionSchema = z.coerce.number().int().min(1).max(100);
 
 const initializeSpecificationSchema = z

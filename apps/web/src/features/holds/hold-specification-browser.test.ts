@@ -82,6 +82,7 @@ function buildSpecification(
 function buildModelAsset(): HoldSpecification['assets'][number] {
   return {
     id: 'model-asset',
+    scanId: 'scan-1',
     kind: 'MODEL_3D',
     status: 'READY',
     originalFileName: 'hold.glb',

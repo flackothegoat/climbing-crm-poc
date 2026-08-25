@@ -92,6 +92,7 @@ function createSubject(updateCount = 1) {
     holdInventoryBalance: { updateMany: vi.fn().mockResolvedValue({ count: updateCount }) },
     holdInventoryMovement: { createMany: vi.fn().mockResolvedValue({ count: 3 }) },
     holdScan: { updateMany: vi.fn().mockResolvedValue({ count: 1 }) },
+    holdModelProcessingJob: { updateMany: vi.fn().mockResolvedValue({ count: 1 }) },
     holdAsset: { updateMany: vi.fn().mockResolvedValue({ count: 1 }) },
     holdVariant: {
       findFirst: vi.fn().mockResolvedValue(record),

@@ -130,6 +130,13 @@ export class HoldRecordDeletionService {
       where: { specificationId, status: HoldScanStatus.DRAFT },
       data: { status: HoldScanStatus.CANCELLED },
     });
+    await transaction.holdModelProcessingJob.updateMany({
+      where: {
+        scan: { specificationId },
+        status: { in: ['QUEUED', 'PROCESSING'] },
+      },
+      data: { status: 'CANCELLED', completedAt: new Date() },
+    });
     await transaction.holdAsset.updateMany({
       where: { OR: [{ specificationId }, { scan: { specificationId } }] },
       data: { status: HoldAssetStatus.DELETED },

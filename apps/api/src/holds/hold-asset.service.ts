@@ -10,6 +10,7 @@ import { AccessControlService, Capability } from '../security/access-control.ser
 import { ObjectStorageService } from '../storage/object-storage.service';
 import { ObjectCleanupService } from '../storage/object-cleanup.service';
 import { validateHoldAsset } from './hold-asset-file';
+import { toProcessingJob } from './hold-model-processing.service';
 
 @Injectable()
 export class HoldAssetService {
@@ -30,25 +31,42 @@ export class HoldAssetService {
     const objectKey = buildObjectKey(session.organization.id, scanId, validated.extension);
     await this.storage.put(objectKey, content, validated.contentType);
     try {
-      const asset = await this.prisma.holdAsset.create({
-        data: {
-          organizationId: session.organization.id,
-          scanId,
-          kind,
-          objectKey,
-          originalFileName: validated.originalFileName,
-          contentType: validated.contentType,
-          sizeBytes: content.length,
-          checksumSha256: validated.checksumSha256,
-          metadata: validated.metadata,
-          createdByAccountId: session.account.id,
-        },
+      const result = await this.prisma.$transaction(async (transaction) => {
+        const asset = await transaction.holdAsset.create({
+          data: {
+            organizationId: session.organization.id,
+            scanId,
+            kind,
+            objectKey,
+            originalFileName: validated.originalFileName,
+            contentType: validated.contentType,
+            sizeBytes: content.length,
+            checksumSha256: validated.checksumSha256,
+            metadata: validated.metadata,
+            createdByAccountId: session.account.id,
+          },
+        });
+        const processingJob =
+          kind === HoldAssetKind.MODEL_SOURCE
+            ? await transaction.holdModelProcessingJob.create({
+                data: {
+                  organizationId: session.organization.id,
+                  scanId,
+                  sourceAssetId: asset.id,
+                  requestedByAccountId: session.account.id,
+                },
+              })
+            : null;
+        return { asset, processingJob };
       });
-      return toAsset(asset);
+      return {
+        ...toAsset(result.asset),
+        ...(result.processingJob ? { processingJob: toProcessingJob(result.processingJob) } : {}),
+      };
     } catch (error) {
       await this.removeObjectQuietly(objectKey);
-      if (isPrismaError(error, 'P2002') && kind === HoldAssetKind.MODEL_3D) {
-        throw new ConflictException('该采集草稿已经有主三维模型，请刷新页面');
+      if (isPrismaError(error, 'P2002') && kind === HoldAssetKind.MODEL_SOURCE) {
+        throw new ConflictException('该采集草稿已经有原始扫描模型，请刷新页面');
       }
       throw error;
     }
@@ -117,14 +135,17 @@ export class HoldAssetService {
       where: { id: scanId, organizationId, status: HoldScanStatus.DRAFT },
       include: {
         assets: {
-          where: { kind: HoldAssetKind.MODEL_3D, status: HoldAssetStatus.READY },
+          where: {
+            kind: { in: [HoldAssetKind.MODEL_SOURCE, HoldAssetKind.MODEL_3D] },
+            status: HoldAssetStatus.READY,
+          },
           select: { id: true },
         },
       },
     });
     if (!scan) throw new NotFoundException('可上传的扫描草稿不存在');
-    if (kind === HoldAssetKind.MODEL_3D && scan.assets.length) {
-      throw new ConflictException('一个扫描档案只能上传一个主 3D 模型');
+    if (kind === HoldAssetKind.MODEL_SOURCE && scan.assets.length) {
+      throw new ConflictException('一个扫描档案只能上传一个原始 3D 模型');
     }
   }
 
@@ -203,6 +224,7 @@ export class HoldAssetService {
 export function toAsset(asset: HoldAsset) {
   return {
     id: asset.id,
+    scanId: asset.scanId,
     kind: asset.kind,
     status: asset.status,
     originalFileName: asset.originalFileName,

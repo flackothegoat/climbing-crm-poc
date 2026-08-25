@@ -175,6 +175,41 @@ const checks = {
     WHERE ("deletedAt" IS NULL AND "activeColor" IS DISTINCT FROM "color")
        OR ("deletedAt" IS NOT NULL AND "activeColor" IS NOT NULL)
   `,
+  holdModelProcessingScopeMismatch: `
+    SELECT COUNT(*)::int AS count
+    FROM "HoldModelProcessingJob" job
+    JOIN "HoldScan" scan ON scan."id" = job."scanId"
+    JOIN "HoldAsset" source ON source."id" = job."sourceAssetId"
+    LEFT JOIN "HoldAsset" output ON output."id" = job."outputAssetId"
+    WHERE scan."organizationId" <> job."organizationId"
+       OR source."organizationId" <> job."organizationId"
+       OR source."scanId" <> job."scanId"
+       OR source."kind" <> 'MODEL_SOURCE'
+       OR NOT EXISTS (
+         SELECT 1 FROM "Membership" membership
+         WHERE membership."accountId" = job."requestedByAccountId"
+           AND membership."organizationId" = job."organizationId"
+       )
+       OR (job."outputAssetId" IS NOT NULL AND (
+         output."id" IS NULL
+         OR output."organizationId" <> job."organizationId"
+         OR output."scanId" <> job."scanId"
+         OR output."kind" <> 'MODEL_3D'
+         OR output."sourceAssetId" <> job."sourceAssetId"
+       ))
+  `,
+  holdModelProcessingStateMismatch: `
+    SELECT COUNT(*)::int AS count
+    FROM "HoldModelProcessingJob"
+    WHERE ("status" IN ('COMPLETED', 'NEEDS_REVIEW') AND (
+             "outputAssetId" IS NULL OR "completedAt" IS NULL
+           ))
+       OR ("status" IN ('FAILED', 'CANCELLED') AND (
+             "outputAssetId" IS NOT NULL OR "completedAt" IS NULL
+           ))
+       OR ("status" = 'PROCESSING' AND "startedAt" IS NULL)
+       OR ("status" = 'QUEUED' AND "outputAssetId" IS NOT NULL)
+  `,
   wallSettingReservationScopeMismatch: `
     SELECT COUNT(*)::int AS count
     FROM "WallSettingJobHoldReservation" reservation

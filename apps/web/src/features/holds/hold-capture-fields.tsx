@@ -1,20 +1,18 @@
 import type { ChangeEvent } from 'react';
-import type { HoldAsset } from './hold-api';
-import type { HoldPreviewStatus } from './use-hold-capture';
+import type { HoldAsset, HoldModelProcessingJob } from './hold-api';
 
 export function HoldCaptureFields(props: {
   modelAsset: HoldAsset | null;
   photoCount: number;
   uploading: boolean;
-  previewStatus: HoldPreviewStatus;
+  modelProcessing: HoldModelProcessingJob | null;
   onModel: (event: ChangeEvent<HTMLInputElement>) => void;
   onPhotos: (event: ChangeEvent<HTMLInputElement>) => void;
-  onRetryPreview: () => void;
 }) {
   return (
     <section className="hold-scan-upload">
       <label className="hold-file-field">
-        主 3D 模型（GLB，必需）
+        手机扫描原始模型（GLB，必需）
         <input
           accept=".glb,model/gltf-binary"
           disabled={props.uploading || Boolean(props.modelAsset)}
@@ -35,28 +33,22 @@ export function HoldCaptureFields(props: {
         <small>{photoDescription(props.photoCount)}</small>
       </label>
       {props.uploading && <p>正在安全上传和校验文件…</p>}
-      {props.modelAsset && (
-        <CapturePreviewStatus status={props.previewStatus} onRetry={props.onRetryPreview} />
-      )}
+      {props.modelAsset && <ModelProcessingStatus job={props.modelProcessing} />}
     </section>
   );
 }
 
-function CapturePreviewStatus(props: { status: HoldPreviewStatus; onRetry: () => void }) {
-  if (props.status === 'FAILED') {
-    return (
-      <p className="is-error">
-        俯瞰缩略图生成失败。
-        <button onClick={props.onRetry} type="button">
-          重试
-        </button>
-      </p>
-    );
+function ModelProcessingStatus({ job }: { job: HoldModelProcessingJob | null }) {
+  if (!job) return <p>原始模型已保存，正在创建后台任务…</p>;
+  if (job.status === 'FAILED') {
+    return <p className="is-error">自动清理失败；原始模型和建档不受影响。</p>;
   }
-  if (props.status === 'READY') return <p className="is-ready">俯瞰缩略图已生成</p>;
-  if (props.status === 'UPLOADING') return <p>正在安全保存俯瞰缩略图…</p>;
-  if (props.status === 'GENERATING') return <p>正在生成俯瞰缩略图…</p>;
-  return null;
+  if (job.status === 'NEEDS_REVIEW') {
+    return <p className="is-ready">展示模型已生成，建议后续人工复核。</p>;
+  }
+  if (job.status === 'COMPLETED') return <p className="is-ready">展示模型已自动生成</p>;
+  if (job.status === 'PROCESSING') return <p>后台正在清理桌面和扫描杂面…</p>;
+  return <p>原始模型已保存，后台任务已排队；现在即可完成建档。</p>;
 }
 
 function photoDescription(count: number): string {

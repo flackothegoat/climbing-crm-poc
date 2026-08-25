@@ -40,7 +40,7 @@ function createSubject() {
         category: { id: 'category-1', gripType: HoldGripType.JUG },
         assets: [
           {
-            kind: HoldAssetKind.MODEL_3D,
+            kind: HoldAssetKind.MODEL_SOURCE,
             status: HoldAssetStatus.READY,
             checksumSha256: 'model-checksum',
           },
@@ -127,7 +127,7 @@ describe('HoldScanService', () => {
       category: { id: 'category-1', gripType: HoldGripType.JUG },
       assets: [
         {
-          kind: HoldAssetKind.MODEL_3D,
+          kind: HoldAssetKind.MODEL_SOURCE,
           status: HoldAssetStatus.READY,
           checksumSha256: 'new-model',
         },

@@ -119,12 +119,22 @@ enum HoldScanMode {
 }
 
 enum HoldAssetKind {
+  MODEL_SOURCE
   MODEL_3D
   MODEL_PREVIEW
   PHOTO_FRONT
   PHOTO_BACK
   PHOTO_MEASUREMENT
   PHOTO_OTHER
+}
+
+enum HoldModelProcessingStatus {
+  QUEUED
+  PROCESSING
+  COMPLETED
+  NEEDS_REVIEW
+  FAILED
+  CANCELLED
 }
 
 enum HoldAssetStatus {
@@ -323,6 +333,7 @@ model Account {
   holdInventoryMovements           HoldInventoryMovement[]   @relation("HoldMovementActor")
   capturedHoldScans                HoldScan[]                @relation("HoldScanCreator")
   createdHoldAssets                HoldAsset[]               @relation("HoldAssetCreator")
+  requestedHoldModelProcessingJobs HoldModelProcessingJob[]  @relation("HoldModelProcessingRequester")
   deletedHoldVariants              HoldVariant[]             @relation("HoldVariantDeleter")
   startedHoldInitializations       HoldInitializationBatch[] @relation("HoldInitializationStarter")
   completedHoldInitializations     HoldInitializationBatch[] @relation("HoldInitializationCompleter")
@@ -353,6 +364,7 @@ model Organization {
   holdInventoryMovements    HoldInventoryMovement[]
   holdScans                 HoldScan[]
   holdAssets                HoldAsset[]
+  holdModelProcessingJobs   HoldModelProcessingJob[]
   holdInitializationBatches HoldInitializationBatch[]
   wallAreas                 WallArea[]
   wallSegments              WallSegment[]
@@ -583,6 +595,7 @@ model HoldScan {
   initializationBatch   HoldInitializationBatch? @relation(fields: [initializationBatchId], references: [id], onDelete: Restrict)
   createdBy             Account                  @relation("HoldScanCreator", fields: [createdByAccountId], references: [id], onDelete: Restrict)
   assets                HoldAsset[]
+  modelProcessingJobs   HoldModelProcessingJob[]
   initializationEntry   HoldInitializationEntry?
   createdAt             DateTime                 @default(now())
   updatedAt             DateTime                 @updatedAt
@@ -594,31 +607,60 @@ model HoldScan {
 }
 
 model HoldAsset {
-  id                 String          @id @default(cuid())
-  organizationId     String
-  scanId             String
-  specificationId    String?
-  kind               HoldAssetKind
-  status             HoldAssetStatus @default(READY)
-  objectKey          String          @unique
-  originalFileName   String
-  contentType        String
-  sizeBytes          Int
-  checksumSha256     String
-  metadata           Json?
-  sourceAssetId      String?         @unique
-  createdByAccountId String
-  organization       Organization    @relation(fields: [organizationId], references: [id], onDelete: Restrict)
-  scan               HoldScan        @relation(fields: [scanId], references: [id], onDelete: Restrict)
-  specification      HoldVariant?    @relation(fields: [specificationId], references: [id], onDelete: Restrict)
-  sourceAsset        HoldAsset?      @relation("HoldAssetDerivation", fields: [sourceAssetId], references: [id], onDelete: Restrict)
-  derivedAsset       HoldAsset?      @relation("HoldAssetDerivation")
-  createdBy          Account         @relation("HoldAssetCreator", fields: [createdByAccountId], references: [id], onDelete: Restrict)
-  createdAt          DateTime        @default(now())
+  id                  String                  @id @default(cuid())
+  organizationId      String
+  scanId              String
+  specificationId     String?
+  kind                HoldAssetKind
+  status              HoldAssetStatus         @default(READY)
+  objectKey           String                  @unique
+  originalFileName    String
+  contentType         String
+  sizeBytes           Int
+  checksumSha256      String
+  metadata            Json?
+  sourceAssetId       String?                 @unique
+  createdByAccountId  String
+  organization        Organization            @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  scan                HoldScan                @relation(fields: [scanId], references: [id], onDelete: Restrict)
+  specification       HoldVariant?            @relation(fields: [specificationId], references: [id], onDelete: Restrict)
+  sourceAsset         HoldAsset?              @relation("HoldAssetDerivation", fields: [sourceAssetId], references: [id], onDelete: Restrict)
+  derivedAsset        HoldAsset?              @relation("HoldAssetDerivation")
+  sourceProcessingJob HoldModelProcessingJob? @relation("HoldModelProcessingSource")
+  outputProcessingJob HoldModelProcessingJob? @relation("HoldModelProcessingOutput")
+  createdBy           Account                 @relation("HoldAssetCreator", fields: [createdByAccountId], references: [id], onDelete: Restrict)
+  createdAt           DateTime                @default(now())
 
   @@index([organizationId, createdAt])
   @@index([scanId, kind])
   @@index([specificationId, kind])
+}
+
+model HoldModelProcessingJob {
+  id                   String                    @id @default(cuid())
+  organizationId       String
+  scanId               String
+  sourceAssetId        String                    @unique
+  outputAssetId        String?                   @unique
+  status               HoldModelProcessingStatus @default(QUEUED)
+  processorVersion     Int                       @default(1)
+  attemptCount         Int                       @default(0)
+  errorCode            String?
+  errorMessage         String?
+  report               Json?
+  requestedByAccountId String
+  startedAt            DateTime?
+  completedAt          DateTime?
+  organization         Organization              @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  scan                 HoldScan                  @relation(fields: [scanId], references: [id], onDelete: Restrict)
+  sourceAsset          HoldAsset                 @relation("HoldModelProcessingSource", fields: [sourceAssetId], references: [id], onDelete: Restrict)
+  outputAsset          HoldAsset?                @relation("HoldModelProcessingOutput", fields: [outputAssetId], references: [id], onDelete: Restrict)
+  requestedBy          Account                   @relation("HoldModelProcessingRequester", fields: [requestedByAccountId], references: [id], onDelete: Restrict)
+  createdAt            DateTime                  @default(now())
+  updatedAt            DateTime                  @updatedAt
+
+  @@index([organizationId, status, createdAt])
+  @@index([scanId, createdAt])
 }
 
 model HoldInitializationBatch {

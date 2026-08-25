@@ -21,6 +21,12 @@ describe('hold asset validation', () => {
     expect(result.checksumSha256).toHaveLength(64);
   });
 
+  it('validates an immutable source scan as a GLB', () => {
+    const result = validateHoldAsset(HoldAssetKind.MODEL_SOURCE, 'phone-scan.glb', minimalGlb());
+    expect(result.contentType).toBe('model/gltf-binary');
+    expect(result.extension).toBe('.glb');
+  });
+
   it('rejects a renamed non-GLB file', () => {
     expect(() => validateHoldAsset(HoldAssetKind.MODEL_3D, 'fake.glb', Buffer.from('no'))).toThrow(
       '3D 模型仅支持有效的 GLB 文件',

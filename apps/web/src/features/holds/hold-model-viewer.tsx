@@ -9,7 +9,14 @@ import {
   type MutableRefObject,
 } from 'react';
 import Image from 'next/image';
-import { getHoldAssetBlob, uploadHoldModelPreview, type HoldAsset } from './hold-api';
+import {
+  getHoldAssetBlob,
+  getHoldModelProcessing,
+  retryHoldModelProcessing,
+  uploadHoldModelPreview,
+  type HoldAsset,
+  type HoldModelProcessingJob,
+} from './hold-api';
 import { createPreviewFile, findModelPreview, holdModelPreviewConfig } from './hold-model-preview';
 
 interface HoldModelViewerProps {
@@ -61,8 +68,79 @@ function useModelViewerRegistration(): void {
 
 export function HoldAssetGallery({ assets }: { assets: HoldAsset[] }) {
   const model = assets.find((asset) => asset.kind === 'MODEL_3D' && asset.status === 'READY');
-  if (!model) return null;
+  if (!model) {
+    const source = assets.find(
+      (asset) => asset.kind === 'MODEL_SOURCE' && asset.status === 'READY',
+    );
+    return source ? <ModelProcessingCard source={source} /> : null;
+  }
   return <ModelAssetGallery assets={assets} model={model} />;
+}
+
+function ModelProcessingCard({ source }: { source: HoldAsset }) {
+  const [job, setJob] = useState(source.processingJob ?? null);
+  const [retrying, setRetrying] = useState(false);
+  const [error, setError] = useState('');
+  useEffect(() => {
+    if (!job || !['QUEUED', 'PROCESSING'].includes(job.status)) return;
+    const timer = window.setInterval(() => {
+      void getHoldModelProcessing(source.scanId)
+        .then(setJob)
+        .catch(() => undefined);
+    }, 2_000);
+    return () => window.clearInterval(timer);
+  }, [job, source.scanId]);
+  useEffect(() => {
+    if (job?.status === 'COMPLETED' || job?.status === 'NEEDS_REVIEW') {
+      window.location.reload();
+    }
+  }, [job?.status]);
+  if (!job) return <p className="hold-record-note">原始扫描已保存，等待后台任务同步。</p>;
+  return (
+    <section className="hold-asset-gallery">
+      <div>
+        <b>3D 展示模型</b>
+        <small>{processingText(job)}</small>
+        {job.errorMessage && <small>{job.errorMessage}</small>}
+        {error && <small className="is-error">{error}</small>}
+      </div>
+      {job.status === 'FAILED' && (
+        <button
+          disabled={retrying}
+          onClick={() => void retryProcessing(job, setJob, setRetrying, setError)}
+          type="button"
+        >
+          {retrying ? '重新排队中…' : '重试自动清理'}
+        </button>
+      )}
+    </section>
+  );
+}
+
+function processingText(job: HoldModelProcessingJob): string {
+  if (job.status === 'QUEUED') return '已排队；不影响库存档案使用';
+  if (job.status === 'PROCESSING') return '后台正在移除桌面和扫描杂面';
+  if (job.status === 'NEEDS_REVIEW') return '模型已生成，等待人工复核';
+  if (job.status === 'FAILED') return '自动清理失败；原始模型仍完整保留';
+  if (job.status === 'CANCELLED') return '处理任务已取消';
+  return '展示模型已生成';
+}
+
+async function retryProcessing(
+  job: HoldModelProcessingJob,
+  setJob: (job: HoldModelProcessingJob) => void,
+  setRetrying: (value: boolean) => void,
+  setError: (value: string) => void,
+): Promise<void> {
+  setRetrying(true);
+  setError('');
+  try {
+    setJob(await retryHoldModelProcessing(job.id));
+  } catch (requestError) {
+    setError(toMessage(requestError, '重新排队失败'));
+  } finally {
+    setRetrying(false);
+  }
 }
 
 function ModelAssetGallery(props: { assets: HoldAsset[]; model: HoldAsset }) {

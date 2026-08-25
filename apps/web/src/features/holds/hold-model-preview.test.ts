@@ -23,6 +23,7 @@ describe('岩点模型缩略图', () => {
 function buildAsset(id: string, kind: HoldAsset['kind'], sourceAssetId: string | null): HoldAsset {
   return {
     id,
+    scanId: 'scan-1',
     kind,
     sourceAssetId,
     status: 'READY',

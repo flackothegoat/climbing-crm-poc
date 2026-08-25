@@ -227,7 +227,10 @@ export class HoldCategoryService {
               where: { deletedAt: null },
               include: {
                 inventory: true,
-                assets: { orderBy: { createdAt: 'asc' } },
+                assets: {
+                  include: { sourceProcessingJob: true },
+                  orderBy: { createdAt: 'asc' },
+                },
                 _count: {
                   select: {
                     movements: true,
@@ -281,7 +284,13 @@ const allSpecificationsInclude = {
     include: {
       variants: {
         where: { deletedAt: null },
-        include: { inventory: true, assets: { orderBy: { createdAt: 'asc' as const } } },
+        include: {
+          inventory: true,
+          assets: {
+            include: { sourceProcessingJob: true },
+            orderBy: { createdAt: 'asc' as const },
+          },
+        },
         orderBy: { createdAt: 'asc' as const },
       },
     },

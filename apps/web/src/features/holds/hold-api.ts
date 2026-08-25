@@ -9,10 +9,34 @@ export type HoldSizeClass = 'XS' | 'S' | 'M' | 'L' | 'XL' | 'XXL';
 export type HoldMountingType = 'BOLT_ON' | 'SCREW_ON' | 'DUAL' | 'UNKNOWN';
 export type InventoryBucket = 'WAREHOUSE' | 'INSTALLED' | 'RESERVED' | 'MAINTENANCE';
 export type HoldAssetKind =
-  'MODEL_3D' | 'MODEL_PREVIEW' | 'PHOTO_FRONT' | 'PHOTO_BACK' | 'PHOTO_MEASUREMENT' | 'PHOTO_OTHER';
+  | 'MODEL_SOURCE'
+  | 'MODEL_3D'
+  | 'MODEL_PREVIEW'
+  | 'PHOTO_FRONT'
+  | 'PHOTO_BACK'
+  | 'PHOTO_MEASUREMENT'
+  | 'PHOTO_OTHER';
+
+export type HoldModelProcessingStatus =
+  'QUEUED' | 'PROCESSING' | 'COMPLETED' | 'NEEDS_REVIEW' | 'FAILED' | 'CANCELLED';
+
+export interface HoldModelProcessingJob {
+  id: string;
+  status: HoldModelProcessingStatus;
+  attemptCount: number;
+  processorVersion: number;
+  sourceAssetId: string;
+  outputAssetId: string | null;
+  errorCode: string | null;
+  errorMessage: string | null;
+  report: Record<string, unknown> | null;
+  createdAt: string;
+  updatedAt: string;
+}
 
 export interface HoldAsset {
   id: string;
+  scanId: string;
   kind: HoldAssetKind;
   status: 'READY' | 'FAILED' | 'DELETED';
   originalFileName: string;
@@ -21,6 +45,7 @@ export interface HoldAsset {
   checksumSha256?: string;
   metadata: Record<string, number> | null;
   sourceAssetId: string | null;
+  processingJob?: HoldModelProcessingJob | null;
   createdAt: string;
 }
 
@@ -276,6 +301,14 @@ export const completeHoldModelAttachment = (scanId: string) =>
 
 export const cancelHoldScan = (scanId: string) =>
   apiRequest<void>(`/holds/scans/${scanId}`, { method: 'DELETE' });
+
+export const getHoldModelProcessing = (scanId: string) =>
+  apiRequest<HoldModelProcessingJob>(`/holds/scans/${scanId}/model-processing`);
+
+export const retryHoldModelProcessing = (jobId: string) =>
+  apiRequest<HoldModelProcessingJob>(`/holds/model-processing/${jobId}/retry`, {
+    method: 'POST',
+  });
 
 export function initializeHoldSpecification(
   specificationId: string,

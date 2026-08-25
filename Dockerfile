@@ -28,6 +28,10 @@ RUN pnpm db:generate && pnpm build
 
 FROM build AS api
 
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends python3 python3-numpy \
+    && rm -rf /var/lib/apt/lists/*
+
 ENV NODE_ENV=production
 ENV API_PORT=3101
 

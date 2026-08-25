@@ -30,11 +30,7 @@ export function AttachHoldModelDialog(props: {
 
   async function complete(): Promise<void> {
     if (!capture.draftId || !capture.modelAsset) {
-      capture.setMessage('请先上传主 3D 模型');
-      return;
-    }
-    if (capture.previewStatus !== 'READY') {
-      capture.setMessage('请等待俯瞰缩略图生成完成');
+      capture.setMessage('请先上传原始 3D 扫描模型');
       return;
     }
     capture.setMessage('');
@@ -59,26 +55,18 @@ export function AttachHoldModelDialog(props: {
           modelAsset={capture.modelAsset}
           photoCount={capture.photos.length}
           uploading={capture.uploading}
-          previewStatus={capture.previewStatus}
+          modelProcessing={capture.modelProcessing}
           onModel={capture.uploadModel}
           onPhotos={capture.uploadPhotos}
-          onRetryPreview={capture.retryModelPreview}
         />
-        {capture.modelAsset && (
-          <HoldModelViewer
-            asset={capture.modelAsset}
-            previewAttempt={capture.previewAttempt}
-            onPreviewError={capture.failModelPreview}
-            onPreviewGenerated={capture.saveModelPreview}
-          />
-        )}
+        {capture.modelAsset && <HoldModelViewer asset={capture.modelAsset} />}
         <footer className="hold-capture-footer">
           <button type="button" onClick={() => void close()}>
             取消
           </button>
           <button
             className="is-primary"
-            disabled={!capture.modelAsset || capture.uploading || capture.previewStatus !== 'READY'}
+            disabled={!capture.modelAsset || capture.uploading}
             onClick={() => void complete()}
             type="button"
           >

@@ -65,7 +65,7 @@ export class HoldScanService {
         await lockHoldOrganization(transaction, session.organization.id);
         const scan = await findDraftScan(transaction, session.organization.id, scanId);
         assertNewSpecificationScan(scan);
-        const modelAsset = requireModelAsset(scan.assets);
+        const modelAsset = requireSourceAsset(scan.assets);
         const { model, variant } = await this.specificationWriter.create(
           transaction,
           session,
@@ -100,7 +100,7 @@ export class HoldScanService {
       await lockHoldOrganization(transaction, session.organization.id);
       const scan = await findDraftScan(transaction, session.organization.id, scanId);
       assertAttachmentScan(scan);
-      requireModelAsset(scan.assets);
+      requireSourceAsset(scan.assets);
       await assertActiveSpecification(transaction, session.organization.id, scan.specificationId);
       await assertSpecificationHasNoModel(transaction, scan.specificationId);
       await completeScanRecords(transaction, scan.id, scan.specificationId);
@@ -130,6 +130,15 @@ export class HoldScanService {
       await transaction.holdAsset.updateMany({
         where: { scanId, status: HoldAssetStatus.READY },
         data: { status: HoldAssetStatus.DELETED },
+      });
+      await transaction.holdModelProcessingJob.updateMany({
+        where: {
+          scanId,
+          status: {
+            in: ['QUEUED', 'PROCESSING'],
+          },
+        },
+        data: { status: 'CANCELLED', completedAt: new Date() },
       });
       await transaction.holdScan.update({
         where: { id: scanId },
@@ -171,7 +180,10 @@ export class HoldScanService {
       select: {
         id: true,
         holdModel: { select: { categoryId: true } },
-        assets: { where: { kind: HoldAssetKind.MODEL_3D }, select: { id: true } },
+        assets: {
+          where: { kind: { in: [HoldAssetKind.MODEL_SOURCE, HoldAssetKind.MODEL_3D] } },
+          select: { id: true },
+        },
       },
     });
     if (!target) throw new NotFoundException('可补充三维模型的岩点档案不存在');
@@ -273,11 +285,11 @@ function assertAttachmentScan(
   }
 }
 
-function requireModelAsset(assets: HoldAsset[]): HoldAsset {
+function requireSourceAsset(assets: HoldAsset[]): HoldAsset {
   const model = assets.find(
-    (asset) => asset.kind === HoldAssetKind.MODEL_3D && asset.status === HoldAssetStatus.READY,
+    (asset) => asset.kind === HoldAssetKind.MODEL_SOURCE && asset.status === HoldAssetStatus.READY,
   );
-  if (!model) throw new ConflictException('请先上传并确认主 3D 模型');
+  if (!model) throw new ConflictException('请先上传原始 3D 扫描模型');
   return model;
 }
 
@@ -286,7 +298,11 @@ async function assertSpecificationHasNoModel(
   specificationId: string,
 ): Promise<void> {
   const count = await transaction.holdAsset.count({
-    where: { specificationId, kind: HoldAssetKind.MODEL_3D, status: HoldAssetStatus.READY },
+    where: {
+      specificationId,
+      kind: { in: [HoldAssetKind.MODEL_SOURCE, HoldAssetKind.MODEL_3D] },
+      status: HoldAssetStatus.READY,
+    },
   });
   if (count) throw new ConflictException('该岩点档案已经有主三维模型');
 }

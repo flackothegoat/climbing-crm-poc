@@ -26,7 +26,7 @@ export function validateHoldAsset(
   const originalFileName = safeFileName(fileName);
   const extension = extname(originalFileName).toLowerCase();
   const metadata =
-    kind === HoldAssetKind.MODEL_3D
+    kind === HoldAssetKind.MODEL_3D || kind === HoldAssetKind.MODEL_SOURCE
       ? validateGlb(extension, content)
       : kind === HoldAssetKind.MODEL_PREVIEW
         ? validateModelPreview(extension, content)
@@ -41,7 +41,9 @@ export function validateHoldAsset(
 }
 
 function trustedContentType(kind: HoldAssetKind, content: Buffer): string {
-  if (kind === HoldAssetKind.MODEL_3D) return 'model/gltf-binary';
+  if (kind === HoldAssetKind.MODEL_3D || kind === HoldAssetKind.MODEL_SOURCE) {
+    return 'model/gltf-binary';
+  }
   if (kind === HoldAssetKind.MODEL_PREVIEW || hasWebpSignature(content)) return 'image/webp';
   if (content[0] === 0xff && content[1] === 0xd8) return 'image/jpeg';
   if (content.subarray(1, 4).toString('ascii') === 'PNG') return 'image/png';

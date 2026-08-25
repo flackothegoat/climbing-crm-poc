@@ -54,8 +54,7 @@ export function CreateHoldRecordDialog(props: {
   }
 
   async function submitScan(specification: HoldSpecificationInput): Promise<void> {
-    if (!capture.draftId || !capture.modelAsset) throw new Error('请先上传主 3D 模型');
-    if (capture.previewStatus !== 'READY') throw new Error('请等待俯瞰缩略图生成完成');
+    if (!capture.draftId || !capture.modelAsset) throw new Error('请先上传原始 3D 扫描模型');
     const inventory = props.batch ? parseObservedCounts(counts) : undefined;
     await finalizeHoldScan(capture.draftId, specification, inventory);
     await finish();
@@ -182,19 +181,11 @@ function ScanCreation(props: {
         modelAsset={props.capture.modelAsset}
         photoCount={props.capture.photos.length}
         uploading={props.capture.uploading}
-        previewStatus={props.capture.previewStatus}
+        modelProcessing={props.capture.modelProcessing}
         onModel={props.capture.uploadModel}
         onPhotos={props.capture.uploadPhotos}
-        onRetryPreview={props.capture.retryModelPreview}
       />
-      {props.capture.modelAsset && (
-        <HoldModelViewer
-          asset={props.capture.modelAsset}
-          previewAttempt={props.capture.previewAttempt}
-          onPreviewError={props.capture.failModelPreview}
-          onPreviewGenerated={props.capture.saveModelPreview}
-        />
-      )}
+      {props.capture.modelAsset && <HoldModelViewer asset={props.capture.modelAsset} />}
       {props.capture.modelAsset && props.hasBatch && (
         <HoldObservedCounts value={props.counts} onChange={props.onCounts} />
       )}

@@ -1,26 +1,38 @@
 'use client';
 
-import { useState, type ChangeEvent } from 'react';
+import { useEffect, useState, type ChangeEvent } from 'react';
 import {
   cancelHoldScan,
-  uploadHoldModelPreview,
+  getHoldModelProcessing,
   uploadHoldScanAsset,
   type HoldAsset,
+  type HoldModelProcessingJob,
   type HoldScan,
 } from './hold-api';
-import { createPreviewFile, holdModelPreviewConfig } from './hold-model-preview';
-
-export type HoldPreviewStatus = 'IDLE' | 'GENERATING' | 'UPLOADING' | 'READY' | 'FAILED';
 
 export function useHoldCapture(createDraft: () => Promise<HoldScan>) {
   const [draftId, setDraftId] = useState('');
   const [modelAsset, setModelAsset] = useState<HoldAsset | null>(null);
-  const [previewAsset, setPreviewAsset] = useState<HoldAsset | null>(null);
-  const [previewStatus, setPreviewStatus] = useState<HoldPreviewStatus>('IDLE');
-  const [previewAttempt, setPreviewAttempt] = useState(0);
+  const [modelProcessing, setModelProcessing] = useState<HoldModelProcessingJob | null>(null);
   const [photos, setPhotos] = useState<HoldAsset[]>([]);
   const [uploading, setUploading] = useState(false);
   const [message, setMessage] = useState('');
+
+  useEffect(() => {
+    if (
+      !draftId ||
+      !modelProcessing ||
+      !['QUEUED', 'PROCESSING'].includes(modelProcessing.status)
+    ) {
+      return;
+    }
+    const timer = window.setInterval(() => {
+      void getHoldModelProcessing(draftId)
+        .then(setModelProcessing)
+        .catch(() => undefined);
+    }, 2_000);
+    return () => window.clearInterval(timer);
+  }, [draftId, modelProcessing]);
 
   async function ensureDraft(): Promise<string> {
     if (draftId) return draftId;
@@ -34,10 +46,9 @@ export function useHoldCapture(createDraft: () => Promise<HoldScan>) {
     if (!file) return;
     await runUpload(async () => {
       const id = await ensureDraft();
-      const uploadedModel = await uploadHoldScanAsset(id, 'MODEL_3D', file);
+      const uploadedModel = await uploadHoldScanAsset(id, 'MODEL_SOURCE', file);
       setModelAsset(uploadedModel);
-      setPreviewAsset(null);
-      setPreviewStatus('GENERATING');
+      setModelProcessing(uploadedModel.processingJob ?? null);
     });
   }
 
@@ -56,35 +67,6 @@ export function useHoldCapture(createDraft: () => Promise<HoldScan>) {
     if (draftId) await cancelHoldScan(draftId);
   }
 
-  async function saveModelPreview(blob: Blob): Promise<void> {
-    if (!modelAsset) throw new Error('请先上传主 3D 模型');
-    setPreviewStatus('UPLOADING');
-    const file = createPreviewFile(blob, modelAsset.originalFileName);
-    try {
-      const uploaded = await uploadHoldModelPreview(
-        modelAsset.id,
-        holdModelPreviewConfig.generationVersion,
-        file,
-      );
-      setPreviewAsset(uploaded);
-      setPreviewStatus('READY');
-    } catch (error) {
-      setPreviewStatus('FAILED');
-      throw error;
-    }
-  }
-
-  function failModelPreview(error: unknown): void {
-    setPreviewStatus('FAILED');
-    setMessage(toMessage(error, '俯瞰缩略图生成失败，请重试'));
-  }
-
-  function retryModelPreview(): void {
-    setMessage('');
-    setPreviewStatus('GENERATING');
-    setPreviewAttempt((value) => value + 1);
-  }
-
   async function runUpload(action: () => Promise<void>): Promise<void> {
     setUploading(true);
     setMessage('');
@@ -100,18 +82,13 @@ export function useHoldCapture(createDraft: () => Promise<HoldScan>) {
   return {
     draftId,
     modelAsset,
-    previewAsset,
-    previewAttempt,
-    previewStatus,
+    modelProcessing,
     photos,
     uploading,
     message,
     setMessage,
     uploadModel,
     uploadPhotos,
-    saveModelPreview,
-    failModelPreview,
-    retryModelPreview,
     cancel,
   };
 }
