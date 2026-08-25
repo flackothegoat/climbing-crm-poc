@@ -14,6 +14,7 @@ import { mountingLabel } from './hold-options';
 import { HoldStockForm } from './hold-stock-form';
 import { HoldSpecificationActions } from './hold-variant-actions';
 import { HoldSpecificationEditor } from './hold-variant-editor';
+import { HoldUnitManager } from './hold-unit-manager';
 
 type ModelFilter = 'ALL' | 'WITH_MODEL' | 'WITHOUT_MODEL';
 type StatusFilter = 'ALL' | 'ACTIVE' | 'ARCHIVED';
@@ -238,6 +239,7 @@ function SpecificationOperations(
       ) : (
         <p className="hold-stopped-note">已停用，暂时不能调整库存。</p>
       )}
+      <HoldUnitManager specification={item} disabled={!props.active} onChanged={props.onChanged} />
       {props.canAdjust && (
         <HoldSpecificationActions
           specification={item}

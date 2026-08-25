@@ -8,6 +8,9 @@ export type HoldGripType =
 export type HoldSizeClass = 'XS' | 'S' | 'M' | 'L' | 'XL' | 'XXL';
 export type HoldMountingType = 'BOLT_ON' | 'SCREW_ON' | 'DUAL' | 'UNKNOWN';
 export type InventoryBucket = 'WAREHOUSE' | 'INSTALLED' | 'RESERVED' | 'MAINTENANCE';
+export type HoldTrackingMode = 'QUANTITY' | 'HYBRID' | 'SERIALIZED';
+export type HoldUnitPhysicalStatus = 'WAREHOUSE' | 'INSTALLED' | 'IN_TRANSIT' | 'UNKNOWN';
+export type HoldUnitOperationalStatus = 'ACTIVE' | 'MAINTENANCE' | 'LOST' | 'RETIRED';
 export type HoldAssetKind =
   | 'MODEL_SOURCE'
   | 'MODEL_3D'
@@ -79,9 +82,50 @@ export interface HoldSpecification {
   color: ClimbingColor;
   sku: string | null;
   status: HoldStatus;
+  trackingMode: HoldTrackingMode;
   assets: HoldAsset[];
   inventory: HoldInventory;
   lifecycle?: HoldLifecycle;
+}
+
+export interface HoldUnit {
+  id: string;
+  assetCode: string;
+  physicalStatus: HoldUnitPhysicalStatus;
+  operationalStatus: HoldUnitOperationalStatus;
+  ownerOrganizationId: string;
+  currentCustodianOrganizationId: string;
+  facility: { id: string; code: string; name: string };
+  tag: {
+    id: string;
+    epc: string;
+    tid: string | null;
+    technology: 'UHF_EPC_GEN2';
+    status: 'ACTIVE' | 'LOST' | 'DAMAGED' | 'REPLACED';
+  } | null;
+  version: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface HoldUnitTrackingSummary {
+  mode: HoldTrackingMode;
+  registeredQuantity: number;
+  taggedQuantity: number;
+  unregisteredQuantity: number;
+  warehouseRegistered: number;
+  warehouseRemaining: number;
+  installedRegistered: number;
+  installedRemaining: number;
+  totalQuantity: number;
+}
+
+export interface HoldUnitListResponse {
+  items: HoldUnit[];
+  total: number;
+  page: number;
+  pageSize: number;
+  tracking: HoldUnitTrackingSummary;
 }
 
 export interface HoldCategory {
@@ -351,6 +395,33 @@ export function recordStockMovement(
       },
 ) {
   return apiRequest(`/holds/specifications/${specificationId}/movements`, {
+    method: 'POST',
+    body: JSON.stringify(input),
+  });
+}
+
+export const getHoldUnits = (specificationId: string) =>
+  apiRequest<HoldUnitListResponse>(`/holds/specifications/${specificationId}/units?pageSize=100`);
+
+export function registerHoldUnits(
+  specificationId: string,
+  input: {
+    requestKey: string;
+    quantity: number;
+    physicalStatus: 'WAREHOUSE' | 'INSTALLED';
+  },
+) {
+  return apiRequest(`/holds/specifications/${specificationId}/units/batches`, {
+    method: 'POST',
+    body: JSON.stringify(input),
+  });
+}
+
+export function bindHoldUnitTag(
+  unitId: string,
+  input: { requestKey: string; epc: string; tid?: string },
+) {
+  return apiRequest<HoldUnit>(`/holds/units/${unitId}/tag`, {
     method: 'POST',
     body: JSON.stringify(input),
   });

@@ -46,7 +46,9 @@ function createSubject(updateCount = 1) {
         inventory: balance,
         holdModel: { categoryId: 'category-1' },
       }),
+      update: vi.fn().mockResolvedValue({}),
     },
+    holdUnit: { count: vi.fn().mockResolvedValue(0) },
     holdInventoryBalance: {
       updateMany: vi.fn().mockResolvedValue({ count: updateCount }),
       findUniqueOrThrow: vi
@@ -91,6 +93,8 @@ function createReversalSubject(reversed = false) {
         },
       }),
     },
+    holdUnit: { count: vi.fn().mockResolvedValue(0) },
+    holdVariant: { update: vi.fn().mockResolvedValue({}) },
     auditEvent: { create: vi.fn().mockResolvedValue({}) },
     holdInventoryBalance: {
       updateMany: vi.fn().mockResolvedValue({ count: 1 }),
@@ -204,6 +208,21 @@ describe('HoldInventoryService', () => {
         note: '盘点差异',
       }),
     ).rejects.toBeInstanceOf(ConflictException);
+  });
+
+  it('拒绝将汇总库存调整到已建物理身份数以下', async () => {
+    const { service, transaction } = createSubject();
+    transaction.holdUnit.count.mockResolvedValue(11);
+    await expect(
+      service.recordMovement(session(MembershipRole.L1_ADMIN), 'variant-1', {
+        requestKey: '77777777-7777-4777-8777-777777777777',
+        type: InventoryMovementType.ADJUSTMENT,
+        bucket: InventoryBucket.WAREHOUSE,
+        targetQuantity: 6,
+        expectedVersion: 2,
+        note: '现场盘点',
+      }),
+    ).rejects.toThrow('汇总库存不能调整到更低');
   });
 
   it('在并发版本冲突时要求刷新重试', async () => {

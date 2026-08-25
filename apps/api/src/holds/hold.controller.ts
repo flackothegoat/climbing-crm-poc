@@ -21,16 +21,19 @@ import type { CurrentSession } from '../auth/session.service';
 import { HoldCategoryService } from './hold-category.service';
 import {
   parseAddSpecification,
+  parseBindHoldUnitTag,
   parseAssetKind,
   parseCreateScan,
   parseCreateCategory,
   parseCreateHoldRecord,
   parseListCategories,
+  parseListHoldUnits,
   parseFinalizeScan,
   parseInitializeSpecification,
   parsePermanentlyDeleteSpecification,
   parsePreviewGenerationVersion,
   parseReverseMovement,
+  parseRegisterHoldUnits,
   parseStockMovement,
   parseStartInitialization,
   parseUpdateCategory,
@@ -43,6 +46,7 @@ import { HoldScanService } from './hold-scan.service';
 import { HoldSpecificationService } from './hold-specification.service';
 import { HoldRecordDeletionService } from './hold-record-deletion.service';
 import { HoldModelProcessingService } from './hold-model-processing.service';
+import { HoldUnitService } from './hold-unit.service';
 
 @ApiTags('holds')
 @ApiCookieAuth()
@@ -58,6 +62,7 @@ export class HoldController {
     private readonly scans: HoldScanService,
     private readonly initialization: HoldInitializationService,
     private readonly modelProcessing: HoldModelProcessingService,
+    private readonly units: HoldUnitService,
   ) {}
 
   @Get('initialization/active')
@@ -334,6 +339,36 @@ export class HoldController {
     @Body() body: unknown,
   ) {
     return this.inventory.recordMovement(session, specificationId, parseStockMovement(body));
+  }
+
+  @Get('specifications/:specificationId/units')
+  @ApiOperation({ summary: '分页读取某个岩点规格下的物理岩点和标签覆盖率' })
+  listUnits(
+    @CurrentSessionContext() session: CurrentSession,
+    @Param('specificationId') specificationId: string,
+    @Query() query: unknown,
+  ) {
+    return this.units.list(session, specificationId, parseListHoldUnits(query));
+  }
+
+  @Post('specifications/:specificationId/units/batches')
+  @ApiOperation({ summary: '将现有汇总库存批量建立为可追踪物理岩点' })
+  registerUnits(
+    @CurrentSessionContext() session: CurrentSession,
+    @Param('specificationId') specificationId: string,
+    @Body() body: unknown,
+  ) {
+    return this.units.registerBatch(session, specificationId, parseRegisterHoldUnits(body));
+  }
+
+  @Post('units/:unitId/tag')
+  @ApiOperation({ summary: '为物理岩点绑定或更换 UHF RFID 标签' })
+  bindUnitTag(
+    @CurrentSessionContext() session: CurrentSession,
+    @Param('unitId') unitId: string,
+    @Body() body: unknown,
+  ) {
+    return this.units.bindTag(session, unitId, parseBindHoldUnitTag(body));
   }
 
   @Post('specifications/:specificationId/initialize')

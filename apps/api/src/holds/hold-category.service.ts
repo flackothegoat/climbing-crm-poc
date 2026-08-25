@@ -237,6 +237,7 @@ export class HoldCategoryService {
                     routeHoldPlacements: true,
                     installations: true,
                     observedWallHolds: true,
+                    holdUnits: true,
                   },
                 },
               },
@@ -365,6 +366,7 @@ type CategoryWithUsage = Prisma.HoldCategoryGetPayload<{
                 routeHoldPlacements: true;
                 installations: true;
                 observedWallHolds: true;
+                holdUnits: true;
               };
             };
           };
@@ -418,7 +420,8 @@ function specificationLifecycle(
       usage._count.movements === 0 &&
       usage._count.routeHoldPlacements === 0 &&
       usage._count.installations === 0 &&
-      usage._count.observedWallHolds === 0,
+      usage._count.observedWallHolds === 0 &&
+      usage._count.holdUnits === 0,
     canStop:
       specification.status === HoldStatus.ACTIVE && specification.inventory.totalQuantity === 0,
     canRestore: specification.status === HoldStatus.ARCHIVED,
@@ -437,7 +440,8 @@ function canDeleteCategory(category: CategoryWithUsage): boolean {
             variant._count.movements === 0 &&
             variant._count.routeHoldPlacements === 0 &&
             variant._count.installations === 0 &&
-            variant._count.observedWallHolds === 0,
+            variant._count.observedWallHolds === 0 &&
+            variant._count.holdUnits === 0,
         ),
     )
   );

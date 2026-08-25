@@ -55,6 +55,7 @@ export function toSpecification(model: HoldModel, variant: VariantWithInventory)
     color: variant.color,
     sku: variant.sku,
     status: variant.status,
+    trackingMode: variant.trackingMode,
     assets: (variant.assets ?? []).map(toAssetSummary),
     inventory: inventoryValues(variant.inventory),
   };

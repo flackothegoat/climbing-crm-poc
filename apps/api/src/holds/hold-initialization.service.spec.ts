@@ -33,7 +33,9 @@ function createSubject() {
     $executeRaw: vi.fn().mockResolvedValue(1),
     holdVariant: {
       findFirst: vi.fn().mockResolvedValue({ id: 'specification-1', status: HoldStatus.ACTIVE }),
+      update: vi.fn().mockResolvedValue({}),
     },
+    holdUnit: { count: vi.fn().mockResolvedValue(0) },
     holdInitializationBatch: {
       findFirst: vi.fn().mockResolvedValue({ _count: { entries: 0, scans: 0 } }),
     },

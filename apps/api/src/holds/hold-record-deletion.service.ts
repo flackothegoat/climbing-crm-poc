@@ -45,6 +45,7 @@ const deletionRecordInclude = {
       observedWallHolds: {
         where: { matchStatus: HoldObservationMatchStatus.CONFIRMED },
       },
+      holdUnits: true,
     },
   },
 } satisfies Prisma.HoldVariantInclude;
@@ -197,6 +198,9 @@ function requireInventory(record: DeletionRecord): NonNullable<DeletionRecord['i
 }
 
 function assertRecordIsUnused(record: DeletionRecord): void {
+  if (record._count.holdUnits > 0) {
+    throw new ConflictException('岩点已建立物理资产身份，只能停用或逐颗报废，不能永久删除');
+  }
   if (record._count.installations > 0) {
     throw new ConflictException('岩点仍有有效安装记录，请先完成拆除和库存回库');
   }

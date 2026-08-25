@@ -13,6 +13,7 @@ import { PrismaService } from '../database/prisma.service';
 import { AccessControlService, Capability } from '../security/access-control.service';
 import type { InitializeSpecificationInput, StartInitializationInput } from './hold.dto';
 import { lockHoldOrganization } from './hold-transaction-lock';
+import { assertInventoryCoversTrackedUnits, refreshHoldTrackingMode } from './hold-unit-tracking';
 
 @Injectable()
 export class HoldInitializationService {
@@ -277,6 +278,16 @@ async function applyObservedBalances(
   counts: InitializationCounts,
   entryId: string,
 ): Promise<void> {
+  const nextQuantities = {
+    ...balance,
+    warehouseQuantity: counts.warehouseQuantity,
+    installedQuantity: counts.installedQuantity,
+  };
+  const trackedUnitCount = await assertInventoryCoversTrackedUnits(
+    transaction,
+    balance.variantId,
+    nextQuantities,
+  );
   const changes = [
     inventoryChange(InventoryBucket.WAREHOUSE, balance.warehouseQuantity, counts.warehouseQuantity),
     inventoryChange(InventoryBucket.INSTALLED, balance.installedQuantity, counts.installedQuantity),
@@ -291,6 +302,7 @@ async function applyObservedBalances(
     },
   });
   if (!updated.count) throw new ConflictException('库存已变化，请刷新后重新确认盘点数量');
+  await refreshHoldTrackingMode(transaction, balance.variantId, nextQuantities, trackedUnitCount);
   if (changes.length) {
     await transaction.holdInventoryMovement.createMany({
       data: changes.map((change) =>

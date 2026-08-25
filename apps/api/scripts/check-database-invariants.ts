@@ -210,6 +210,62 @@ const checks = {
        OR ("status" = 'PROCESSING' AND "startedAt" IS NULL)
        OR ("status" = 'QUEUED' AND "outputAssetId" IS NOT NULL)
   `,
+  holdUnitScopeMismatch: `
+    SELECT COUNT(*)::int AS count
+    FROM "HoldUnit" unit
+    JOIN "HoldVariant" variant ON variant."id" = unit."holdVariantId"
+    JOIN "HoldModel" model ON model."id" = variant."holdModelId"
+    JOIN "Facility" facility ON facility."id" = unit."currentFacilityId"
+    JOIN "HoldUnitRegistrationBatch" batch ON batch."id" = unit."registrationBatchId"
+    WHERE model."organizationId" <> unit."ownerOrganizationId"
+       OR facility."organizationId" <> unit."currentCustodianOrganizationId"
+       OR batch."organizationId" <> unit."ownerOrganizationId"
+       OR batch."holdVariantId" <> unit."holdVariantId"
+  `,
+  holdUnitTagScopeMismatch: `
+    SELECT COUNT(*)::int AS count
+    FROM "HoldUnitTagBinding" binding
+    JOIN "HoldUnit" unit ON unit."id" = binding."holdUnitId"
+    JOIN "RfidTag" tag ON tag."id" = binding."rfidTagId"
+    WHERE unit."ownerOrganizationId" <> tag."organizationId"
+  `,
+  trackedUnitsExceedInventory: `
+    SELECT COUNT(*)::int AS count
+    FROM (
+      SELECT unit."holdVariantId", COUNT(*)::int AS quantity
+      FROM "HoldUnit" unit
+      WHERE unit."operationalStatus" <> 'RETIRED'
+      GROUP BY unit."holdVariantId"
+    ) tracked
+    JOIN "HoldInventoryBalance" balance ON balance."variantId" = tracked."holdVariantId"
+    WHERE tracked.quantity > (
+      balance."warehouseQuantity" + balance."installedQuantity" +
+      balance."reservedQuantity" + balance."maintenanceQuantity"
+    )
+  `,
+  holdTrackingModeMismatch: `
+    SELECT COUNT(*)::int AS count
+    FROM "HoldVariant" variant
+    JOIN "HoldInventoryBalance" balance ON balance."variantId" = variant."id"
+    LEFT JOIN (
+      SELECT unit."holdVariantId", COUNT(*)::int AS quantity
+      FROM "HoldUnit" unit
+      WHERE unit."operationalStatus" <> 'RETIRED'
+      GROUP BY unit."holdVariantId"
+    ) tracked ON tracked."holdVariantId" = variant."id"
+    WHERE (variant."trackingMode" = 'QUANTITY' AND COALESCE(tracked.quantity, 0) <> 0)
+       OR (variant."trackingMode" = 'HYBRID' AND (
+         COALESCE(tracked.quantity, 0) = 0 OR
+         COALESCE(tracked.quantity, 0) >= (
+           balance."warehouseQuantity" + balance."installedQuantity" +
+           balance."reservedQuantity" + balance."maintenanceQuantity"
+         )
+       ))
+       OR (variant."trackingMode" = 'SERIALIZED' AND COALESCE(tracked.quantity, 0) <> (
+         balance."warehouseQuantity" + balance."installedQuantity" +
+         balance."reservedQuantity" + balance."maintenanceQuantity"
+       ))
+  `,
   wallSettingReservationScopeMismatch: `
     SELECT COUNT(*)::int AS count
     FROM "WallSettingJobHoldReservation" reservation

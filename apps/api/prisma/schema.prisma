@@ -107,6 +107,62 @@ enum InventoryVerificationStatus {
   VERIFIED
 }
 
+enum HoldTrackingMode {
+  QUANTITY
+  HYBRID
+  SERIALIZED
+}
+
+enum FacilityStatus {
+  ACTIVE
+  ARCHIVED
+}
+
+enum HoldUnitPhysicalStatus {
+  WAREHOUSE
+  INSTALLED
+  IN_TRANSIT
+  UNKNOWN
+}
+
+enum HoldUnitOperationalStatus {
+  ACTIVE
+  MAINTENANCE
+  LOST
+  RETIRED
+}
+
+enum RfidTechnology {
+  UHF_EPC_GEN2
+}
+
+enum RfidTagStatus {
+  ACTIVE
+  LOST
+  DAMAGED
+  REPLACED
+}
+
+enum HoldUnitEventType {
+  REGISTERED
+  TAG_BOUND
+  TAG_REPLACED
+  INVENTORY_CONFIRMED
+  INSTALLED
+  REMOVED
+  LOAN_RESERVED
+  LOAN_DISPATCHED
+  LOAN_RECEIVED
+  RETURN_DISPATCHED
+  RETURN_RECEIVED
+  MAINTENANCE_STARTED
+  MAINTENANCE_COMPLETED
+  LOST
+  FOUND
+  RETIRED
+  CORRECTED
+}
+
 enum HoldScanStatus {
   DRAFT
   COMPLETED
@@ -321,76 +377,86 @@ enum HoldInstallationSource {
 }
 
 model Account {
-  id                               String                    @id @default(cuid())
-  email                            String                    @unique
+  id                               String                      @id @default(cuid())
+  email                            String                      @unique
   passwordHash                     String
-  status                           AccountStatus             @default(ACTIVE)
+  status                           AccountStatus               @default(ACTIVE)
   memberships                      Membership[]
-  sentInvitations                  StaffInvitation[]         @relation("InvitationSender")
-  acceptedInvitations              StaffInvitation[]         @relation("InvitationAcceptor")
-  createdHoldModels                HoldModel[]               @relation("HoldModelCreator")
-  createdHoldCategories            HoldCategory[]            @relation("HoldCategoryCreator")
-  holdInventoryMovements           HoldInventoryMovement[]   @relation("HoldMovementActor")
-  capturedHoldScans                HoldScan[]                @relation("HoldScanCreator")
-  createdHoldAssets                HoldAsset[]               @relation("HoldAssetCreator")
-  requestedHoldModelProcessingJobs HoldModelProcessingJob[]  @relation("HoldModelProcessingRequester")
-  deletedHoldVariants              HoldVariant[]             @relation("HoldVariantDeleter")
-  startedHoldInitializations       HoldInitializationBatch[] @relation("HoldInitializationStarter")
-  completedHoldInitializations     HoldInitializationBatch[] @relation("HoldInitializationCompleter")
-  createdHoldInitializationEntries HoldInitializationEntry[] @relation("HoldInitializationEntryCreator")
-  createdRouteVersions             RouteVersion[]            @relation("RouteVersionCreator")
-  createdRoutePublicLinks          RoutePublicLink[]         @relation("RoutePublicLinkCreator")
-  createdRoutePhotos               RoutePhoto[]              @relation("RoutePhotoCreator")
-  createdRouteVisualAnnotations    RouteVisualAnnotation[]   @relation("RouteVisualAnnotationCreator")
-  confirmedRouteVisualAnnotations  RouteVisualAnnotation[]   @relation("RouteVisualAnnotationConfirmer")
-  createdClimbObservations         ClimbObservation[]        @relation("ClimbObservationCreator")
-  createdWallGeometryVersions      WallGeometryVersion[]     @relation("WallGeometryVersionCreator")
-  createdWallAssets                WallAsset[]               @relation("WallAssetCreator")
-  createdWallCaptures              WallCapture[]             @relation("WallCaptureCreator")
-  createdWallSettingJobs           WallSettingJob[]          @relation("WallSettingJobCreator")
-  installedHolds                   HoldInstallation[]        @relation("HoldInstallationInstaller")
-  removedHoldInstallations         HoldInstallation[]        @relation("HoldInstallationRemover")
-  createdAt                        DateTime                  @default(now())
-  updatedAt                        DateTime                  @updatedAt
+  sentInvitations                  StaffInvitation[]           @relation("InvitationSender")
+  acceptedInvitations              StaffInvitation[]           @relation("InvitationAcceptor")
+  createdHoldModels                HoldModel[]                 @relation("HoldModelCreator")
+  createdHoldCategories            HoldCategory[]              @relation("HoldCategoryCreator")
+  holdInventoryMovements           HoldInventoryMovement[]     @relation("HoldMovementActor")
+  capturedHoldScans                HoldScan[]                  @relation("HoldScanCreator")
+  createdHoldAssets                HoldAsset[]                 @relation("HoldAssetCreator")
+  requestedHoldModelProcessingJobs HoldModelProcessingJob[]    @relation("HoldModelProcessingRequester")
+  deletedHoldVariants              HoldVariant[]               @relation("HoldVariantDeleter")
+  startedHoldInitializations       HoldInitializationBatch[]   @relation("HoldInitializationStarter")
+  completedHoldInitializations     HoldInitializationBatch[]   @relation("HoldInitializationCompleter")
+  createdHoldInitializationEntries HoldInitializationEntry[]   @relation("HoldInitializationEntryCreator")
+  createdRouteVersions             RouteVersion[]              @relation("RouteVersionCreator")
+  createdRoutePublicLinks          RoutePublicLink[]           @relation("RoutePublicLinkCreator")
+  createdRoutePhotos               RoutePhoto[]                @relation("RoutePhotoCreator")
+  createdRouteVisualAnnotations    RouteVisualAnnotation[]     @relation("RouteVisualAnnotationCreator")
+  confirmedRouteVisualAnnotations  RouteVisualAnnotation[]     @relation("RouteVisualAnnotationConfirmer")
+  createdClimbObservations         ClimbObservation[]          @relation("ClimbObservationCreator")
+  createdWallGeometryVersions      WallGeometryVersion[]       @relation("WallGeometryVersionCreator")
+  createdWallAssets                WallAsset[]                 @relation("WallAssetCreator")
+  createdWallCaptures              WallCapture[]               @relation("WallCaptureCreator")
+  createdWallSettingJobs           WallSettingJob[]            @relation("WallSettingJobCreator")
+  installedHolds                   HoldInstallation[]          @relation("HoldInstallationInstaller")
+  removedHoldInstallations         HoldInstallation[]          @relation("HoldInstallationRemover")
+  registeredHoldUnits              HoldUnit[]                  @relation("HoldUnitRegistrar")
+  createdHoldUnitBatches           HoldUnitRegistrationBatch[] @relation("HoldUnitBatchCreator")
+  holdUnitEvents                   HoldUnitEvent[]             @relation("HoldUnitEventActor")
+  boundHoldUnitTags                HoldUnitTagBinding[]        @relation("HoldUnitTagBinder")
+  createdAt                        DateTime                    @default(now())
+  updatedAt                        DateTime                    @updatedAt
 }
 
 model Organization {
-  id                        String                          @id @default(cuid())
-  name                      String
-  memberships               Membership[]
-  invitations               StaffInvitation[]
-  holdModels                HoldModel[]
-  holdCategories            HoldCategory[]
-  holdInventoryMovements    HoldInventoryMovement[]
-  holdScans                 HoldScan[]
-  holdAssets                HoldAsset[]
-  holdModelProcessingJobs   HoldModelProcessingJob[]
-  holdInitializationBatches HoldInitializationBatch[]
-  wallAreas                 WallArea[]
-  wallSegments              WallSegment[]
-  wallHoles                 WallHole[]
-  routes                    Route[]
-  routeVersions             RouteVersion[]
-  routeHoldPlacements       RouteHoldPlacement[]
-  climbObservations         ClimbObservation[]
-  wallGeometryVersions      WallGeometryVersion[]
-  wallAssets                WallAsset[]
-  wallCaptures              WallCapture[]
-  wallObservedHolds         WallObservedHold[]
-  wallSettingJobs           WallSettingJob[]
-  wallSegmentAdjacencies    WallSegmentAdjacency[]
-  holdInstallations         HoldInstallation[]
-  wallSettingReservations   WallSettingJobHoldReservation[]
-  routeVersionWallSegments  RouteVersionWallSegment[]
-  routePlacementAnchors     RouteHoldPlacementAnchor[]
-  routePublicLinks          RoutePublicLink[]
-  routeFeedback             RouteFeedback[]
-  routePhotos               RoutePhoto[]
-  routeVisualAnnotations    RouteVisualAnnotation[]
-  routeVisualPoints         RouteVisualPoint[]
-  holdInstallationAnchors   HoldInstallationAnchor[]
-  createdAt                 DateTime                        @default(now())
-  updatedAt                 DateTime                        @updatedAt
+  id                          String                          @id @default(cuid())
+  name                        String
+  memberships                 Membership[]
+  invitations                 StaffInvitation[]
+  holdModels                  HoldModel[]
+  holdCategories              HoldCategory[]
+  holdInventoryMovements      HoldInventoryMovement[]
+  holdScans                   HoldScan[]
+  holdAssets                  HoldAsset[]
+  holdModelProcessingJobs     HoldModelProcessingJob[]
+  holdInitializationBatches   HoldInitializationBatch[]
+  wallAreas                   WallArea[]
+  wallSegments                WallSegment[]
+  wallHoles                   WallHole[]
+  routes                      Route[]
+  routeVersions               RouteVersion[]
+  routeHoldPlacements         RouteHoldPlacement[]
+  climbObservations           ClimbObservation[]
+  wallGeometryVersions        WallGeometryVersion[]
+  wallAssets                  WallAsset[]
+  wallCaptures                WallCapture[]
+  wallObservedHolds           WallObservedHold[]
+  wallSettingJobs             WallSettingJob[]
+  wallSegmentAdjacencies      WallSegmentAdjacency[]
+  holdInstallations           HoldInstallation[]
+  wallSettingReservations     WallSettingJobHoldReservation[]
+  routeVersionWallSegments    RouteVersionWallSegment[]
+  routePlacementAnchors       RouteHoldPlacementAnchor[]
+  routePublicLinks            RoutePublicLink[]
+  routeFeedback               RouteFeedback[]
+  routePhotos                 RoutePhoto[]
+  routeVisualAnnotations      RouteVisualAnnotation[]
+  routeVisualPoints           RouteVisualPoint[]
+  holdInstallationAnchors     HoldInstallationAnchor[]
+  facilities                  Facility[]
+  ownedHoldUnits              HoldUnit[]                      @relation("HoldUnitOwner")
+  custodiedHoldUnits          HoldUnit[]                      @relation("HoldUnitCustodian")
+  rfidTags                    RfidTag[]
+  holdUnitRegistrationBatches HoldUnitRegistrationBatch[]
+  holdUnitEvents              HoldUnitEvent[]
+  createdAt                   DateTime                        @default(now())
+  updatedAt                   DateTime                        @updatedAt
 }
 
 model Membership {
@@ -510,6 +576,7 @@ model HoldVariant {
   color                   ClimbingColor
   sku                     String?
   status                  HoldStatus                      @default(ACTIVE)
+  trackingMode            HoldTrackingMode                @default(QUANTITY)
   activeColor             ClimbingColor?
   deletedAt               DateTime?
   deletedByAccountId      String?
@@ -526,6 +593,8 @@ model HoldVariant {
   observedWallHolds       WallObservedHold[]              @relation("ObservedHoldMatch")
   installations           HoldInstallation[]
   wallSettingReservations WallSettingJobHoldReservation[]
+  holdUnits               HoldUnit[]
+  registrationBatches     HoldUnitRegistrationBatch[]
   createdAt               DateTime                        @default(now())
   updatedAt               DateTime                        @updatedAt
 
@@ -534,6 +603,128 @@ model HoldVariant {
   @@index([holdModelId, status])
   @@index([holdModelId, deletedAt])
   @@index([deletedByAccountId])
+}
+
+model Facility {
+  id                  String                      @id @default(cuid())
+  organizationId      String
+  code                String
+  name                String
+  status              FacilityStatus              @default(ACTIVE)
+  isDefault           Boolean                     @default(false)
+  organization        Organization                @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  holdUnits           HoldUnit[]
+  registrationBatches HoldUnitRegistrationBatch[]
+  createdAt           DateTime                    @default(now())
+  updatedAt           DateTime                    @updatedAt
+
+  @@unique([organizationId, code])
+  @@index([organizationId, status])
+}
+
+model HoldUnitRegistrationBatch {
+  id                 String                 @id @default(cuid())
+  organizationId     String
+  holdVariantId      String
+  facilityId         String
+  requestKey         String
+  physicalStatus     HoldUnitPhysicalStatus
+  quantity           Int
+  createdByAccountId String
+  organization       Organization           @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  holdVariant        HoldVariant            @relation(fields: [holdVariantId], references: [id], onDelete: Restrict)
+  facility           Facility               @relation(fields: [facilityId], references: [id], onDelete: Restrict)
+  createdBy          Account                @relation("HoldUnitBatchCreator", fields: [createdByAccountId], references: [id], onDelete: Restrict)
+  units              HoldUnit[]
+  createdAt          DateTime               @default(now())
+
+  @@unique([organizationId, requestKey])
+  @@index([holdVariantId, createdAt])
+  @@index([facilityId, createdAt])
+}
+
+model HoldUnit {
+  id                             String                    @id @default(cuid())
+  assetCode                      String                    @unique
+  holdVariantId                  String
+  ownerOrganizationId            String
+  currentCustodianOrganizationId String
+  currentFacilityId              String
+  registrationBatchId            String
+  physicalStatus                 HoldUnitPhysicalStatus
+  operationalStatus              HoldUnitOperationalStatus @default(ACTIVE)
+  version                        Int                       @default(0)
+  registeredByAccountId          String
+  retiredAt                      DateTime?
+  holdVariant                    HoldVariant               @relation(fields: [holdVariantId], references: [id], onDelete: Restrict)
+  ownerOrganization              Organization              @relation("HoldUnitOwner", fields: [ownerOrganizationId], references: [id], onDelete: Restrict)
+  currentCustodianOrganization   Organization              @relation("HoldUnitCustodian", fields: [currentCustodianOrganizationId], references: [id], onDelete: Restrict)
+  currentFacility                Facility                  @relation(fields: [currentFacilityId], references: [id], onDelete: Restrict)
+  registrationBatch              HoldUnitRegistrationBatch @relation(fields: [registrationBatchId], references: [id], onDelete: Restrict)
+  registeredBy                   Account                   @relation("HoldUnitRegistrar", fields: [registeredByAccountId], references: [id], onDelete: Restrict)
+  tagBindings                    HoldUnitTagBinding[]
+  events                         HoldUnitEvent[]
+  createdAt                      DateTime                  @default(now())
+  updatedAt                      DateTime                  @updatedAt
+
+  @@index([holdVariantId, physicalStatus, operationalStatus])
+  @@index([ownerOrganizationId, physicalStatus])
+  @@index([currentCustodianOrganizationId, currentFacilityId, physicalStatus])
+  @@index([registrationBatchId])
+}
+
+model RfidTag {
+  id             String               @id @default(cuid())
+  organizationId String
+  technology     RfidTechnology       @default(UHF_EPC_GEN2)
+  epc            String               @unique
+  tid            String?              @unique
+  status         RfidTagStatus        @default(ACTIVE)
+  organization   Organization         @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  bindings       HoldUnitTagBinding[]
+  createdAt      DateTime             @default(now())
+  updatedAt      DateTime             @updatedAt
+
+  @@index([organizationId, status])
+}
+
+model HoldUnitTagBinding {
+  id               String    @id @default(cuid())
+  holdUnitId       String
+  rfidTagId        String
+  boundByAccountId String
+  boundAt          DateTime  @default(now())
+  unboundAt        DateTime?
+  unbindReason     String?
+  holdUnit         HoldUnit  @relation(fields: [holdUnitId], references: [id], onDelete: Restrict)
+  rfidTag          RfidTag   @relation(fields: [rfidTagId], references: [id], onDelete: Restrict)
+  boundBy          Account   @relation("HoldUnitTagBinder", fields: [boundByAccountId], references: [id], onDelete: Restrict)
+
+  @@index([holdUnitId, unboundAt])
+  @@index([rfidTagId, unboundAt])
+}
+
+model HoldUnitEvent {
+  id                          String            @id @default(cuid())
+  organizationId              String
+  holdUnitId                  String
+  type                        HoldUnitEventType
+  actorAccountId              String
+  requestKey                  String?
+  fromCustodianOrganizationId String?
+  toCustodianOrganizationId   String?
+  fromFacilityId              String?
+  toFacilityId                String?
+  metadata                    Json?
+  occurredAt                  DateTime          @default(now())
+  recordedAt                  DateTime          @default(now())
+  organization                Organization      @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  holdUnit                    HoldUnit          @relation(fields: [holdUnitId], references: [id], onDelete: Restrict)
+  actor                       Account           @relation("HoldUnitEventActor", fields: [actorAccountId], references: [id], onDelete: Restrict)
+
+  @@unique([organizationId, requestKey])
+  @@index([holdUnitId, occurredAt])
+  @@index([organizationId, occurredAt])
 }
 
 model HoldInventoryBalance {

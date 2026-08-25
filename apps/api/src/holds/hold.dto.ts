@@ -7,6 +7,7 @@ import {
   HoldScanMode,
   HoldSizeClass,
   HoldStatus,
+  HoldUnitPhysicalStatus,
   InventoryBucket,
   InventoryMovementType,
 } from '@prisma/client';
@@ -149,6 +150,37 @@ const createHoldRecordSchema = z.object({
   initialization: initializeSpecificationSchema.optional(),
 });
 
+const listHoldUnitsSchema = z.object({
+  search: z.string().trim().max(80).optional(),
+  physicalStatus: z.nativeEnum(HoldUnitPhysicalStatus).optional(),
+  tagged: z.enum(['true', 'false']).optional(),
+  page: z.coerce.number().int().min(1).default(1),
+  pageSize: z.coerce.number().int().min(1).max(100).default(50),
+});
+
+const registerHoldUnitsSchema = z.object({
+  requestKey: z.string().uuid(),
+  quantity: z.number().int().min(1).max(500),
+  physicalStatus: z.enum([HoldUnitPhysicalStatus.WAREHOUSE, HoldUnitPhysicalStatus.INSTALLED]),
+});
+
+const rfidIdentifier = z
+  .string()
+  .trim()
+  .transform((value) => value.replace(/[\s:-]/g, '').toUpperCase())
+  .refine(
+    (value) => /^[0-9A-F]{8,128}$/.test(value) && value.length % 2 === 0,
+    'RFID 标识必须是 8 至 128 位偶数长度十六进制字符',
+  );
+
+const bindHoldUnitTagSchema = z.object({
+  requestKey: z.string().uuid(),
+  epc: rfidIdentifier,
+  tid: z
+    .preprocess((value) => (value === '' ? undefined : value), rfidIdentifier.optional())
+    .optional(),
+});
+
 export type CreateCategoryInput = z.infer<typeof createCategorySchema>;
 export type UpdateCategoryInput = z.infer<typeof updateCategorySchema>;
 export type AddSpecificationInput = z.infer<typeof specificationSchema>;
@@ -164,6 +196,9 @@ export type CreateScanInput = z.infer<typeof createScanSchema>;
 export type FinalizeScanInput = z.infer<typeof finalizeScanSchema>;
 export type InitializeSpecificationInput = z.infer<typeof initializeSpecificationSchema>;
 export type CreateHoldRecordInput = z.infer<typeof createHoldRecordSchema>;
+export type ListHoldUnitsInput = z.infer<typeof listHoldUnitsSchema>;
+export type RegisterHoldUnitsInput = z.infer<typeof registerHoldUnitsSchema>;
+export type BindHoldUnitTagInput = z.infer<typeof bindHoldUnitTagSchema>;
 
 export const parseCreateCategory = (input: unknown) => parse(createCategorySchema, input);
 export const parseUpdateCategory = (input: unknown) => parse(updateCategorySchema, input);
@@ -180,6 +215,9 @@ export const parseFinalizeScan = (input: unknown) => parse(finalizeScanSchema, i
 export const parseInitializeSpecification = (input: unknown) =>
   parse(initializeSpecificationSchema, input);
 export const parseCreateHoldRecord = (input: unknown) => parse(createHoldRecordSchema, input);
+export const parseListHoldUnits = (input: unknown) => parse(listHoldUnitsSchema, input);
+export const parseRegisterHoldUnits = (input: unknown) => parse(registerHoldUnitsSchema, input);
+export const parseBindHoldUnitTag = (input: unknown) => parse(bindHoldUnitTagSchema, input);
 export const parseAssetKind = (input: unknown) => parse(uploadAssetKindSchema, input);
 export const parsePreviewGenerationVersion = (input: unknown) =>
   parse(previewGenerationVersionSchema, input);

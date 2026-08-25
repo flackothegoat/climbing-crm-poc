@@ -8,6 +8,7 @@ import { AccessControlService, Capability } from '../security/access-control.ser
 import type { ReverseMovementInput, StockMovementInput } from './hold.dto';
 import { inventoryValues } from './hold.mapper';
 import { lockHoldOrganization } from './hold-transaction-lock';
+import { assertInventoryCoversTrackedUnits, refreshHoldTrackingMode } from './hold-unit-tracking';
 
 type QuantityField =
   'warehouseQuantity' | 'installedQuantity' | 'reservedQuantity' | 'maintenanceQuantity';
@@ -189,6 +190,12 @@ export class HoldInventoryService {
     const beforeQuantity = variant.inventory[field];
     const afterQuantity = beforeQuantity + command.quantityDelta;
     if (afterQuantity < 0) throw new ConflictException('当前库存不足，无法撤销或调整');
+    const nextQuantities = { ...variant.inventory, [field]: afterQuantity };
+    const trackedUnitCount = await assertInventoryCoversTrackedUnits(
+      transaction,
+      variant.id,
+      nextQuantities,
+    );
     await updateBalance(transaction, variant.inventory, { [field]: afterQuantity });
     await transaction.holdInventoryMovement.create({
       data: movementData(session, variant.id, command, beforeQuantity, afterQuantity),
@@ -204,6 +211,7 @@ export class HoldInventoryService {
     const updated = await transaction.holdInventoryBalance.findUniqueOrThrow({
       where: { id: variant.inventory.id },
     });
+    await refreshHoldTrackingMode(transaction, variant.id, updated, trackedUnitCount);
     return inventoryValues(updated);
   }
 

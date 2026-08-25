@@ -66,6 +66,7 @@ function buildSpecification(
     color: 'GREEN',
     sku: null,
     status: 'ACTIVE',
+    trackingMode: 'QUANTITY',
     assets: [],
     inventory: {
       warehouseQuantity: 0,

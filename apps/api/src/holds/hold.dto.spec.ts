@@ -9,11 +9,13 @@ import {
 import { describe, expect, it } from 'vitest';
 import {
   parseAddSpecification,
+  parseBindHoldUnitTag,
   parseCreateCategory,
   parseCreateScan,
   parseInitializeSpecification,
   parsePermanentlyDeleteSpecification,
   parseReverseMovement,
+  parseRegisterHoldUnits,
   parseStockMovement,
 } from './hold.dto';
 
@@ -112,5 +114,31 @@ describe('岩点参数校验', () => {
     expect(() => parseCreateScan({ mode: HoldScanMode.ENRICH_SPECIFICATION })).toThrow(
       BadRequestException,
     );
+  });
+
+  it('物理岩点只能从仓库或已上墙实数中批量建档', () => {
+    const requestKey = '77777777-7777-4777-8777-777777777777';
+    expect(
+      parseRegisterHoldUnits({ requestKey, quantity: 20, physicalStatus: 'WAREHOUSE' }),
+    ).toMatchObject({ quantity: 20, physicalStatus: 'WAREHOUSE' });
+    expect(() =>
+      parseRegisterHoldUnits({ requestKey, quantity: 1, physicalStatus: 'IN_TRANSIT' }),
+    ).toThrow(BadRequestException);
+  });
+
+  it('RFID 标识去除分隔符并统一为大写十六进制', () => {
+    expect(
+      parseBindHoldUnitTag({
+        requestKey: '88888888-8888-4888-8888-888888888888',
+        epc: 'e2 80-11:90',
+        tid: 'ab-cd-12-34',
+      }),
+    ).toMatchObject({ epc: 'E2801190', tid: 'ABCD1234' });
+    expect(() =>
+      parseBindHoldUnitTag({
+        requestKey: '88888888-8888-4888-8888-888888888888',
+        epc: 'not-an-epc',
+      }),
+    ).toThrow(BadRequestException);
   });
 });
