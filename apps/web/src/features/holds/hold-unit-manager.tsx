@@ -11,9 +11,9 @@ import {
 } from './hold-api';
 
 const trackingLabel = {
-  QUANTITY: '按数量管理',
-  HYBRID: '部分单体化',
-  SERIALIZED: '全部单体化',
+  QUANTITY: '仅统计数量',
+  HYBRID: '部分已编号',
+  SERIALIZED: '全部已编号',
 } as const;
 
 const physicalLabel = {
@@ -41,7 +41,7 @@ export function HoldUnitManager(props: {
     try {
       setData(await getHoldUnits(props.specification.id));
     } catch (requestError) {
-      setError(toMessage(requestError, '物理岩点加载失败'));
+      setError(toMessage(requestError, '实物信息加载失败'));
     } finally {
       setLoading(false);
     }
@@ -66,7 +66,7 @@ export function HoldUnitManager(props: {
       setQuantity(1);
       await Promise.all([load(), props.onChanged()]);
     } catch (requestError) {
-      setError(toMessage(requestError, '物理岩点建档失败'));
+      setError(toMessage(requestError, '资产编号生成失败'));
     } finally {
       setSaving(false);
     }
@@ -76,26 +76,26 @@ export function HoldUnitManager(props: {
     <section className="hold-unit-manager">
       <header>
         <div>
-          <h4>物理岩点与电子标签</h4>
-          <p>每颗实物有独立资产编号；原库存数量仍作为汇总，不会重复增加。</p>
+          <h4>实物与电子标签</h4>
+          <p>每颗实物可以生成独立资产编号；总数不会因此重复增加。</p>
         </div>
         {data && <b>{trackingLabel[data.tracking.mode]}</b>}
       </header>
-      {loading && !data && <p className="hold-unit-empty">正在读取物理岩点…</p>}
+      {loading && !data && <p className="hold-unit-empty">正在读取实物信息…</p>}
       {error && <p className="team-feedback is-error">{error}</p>}
       {data && (
         <>
           <div className="hold-unit-coverage">
             <span>
-              <small>库存总数</small>
+              <small>总数</small>
               <b>{data.tracking.totalQuantity}</b>
             </span>
             <span>
-              <small>已建单体</small>
+              <small>已编号</small>
               <b>{data.tracking.registeredQuantity}</b>
             </span>
             <span>
-              <small>待建单体</small>
+              <small>未编号</small>
               <b>{data.tracking.unregisteredQuantity}</b>
             </span>
             <span>
@@ -106,15 +106,17 @@ export function HoldUnitManager(props: {
           {data.tracking.unregisteredQuantity > 0 && (
             <div className="hold-unit-register">
               <label>
-                来源
+                当前位置
                 <select
                   value={status}
                   disabled={props.disabled || saving}
                   onChange={(event) => setStatus(event.target.value as typeof status)}
                 >
-                  <option value="WAREHOUSE">仓库（剩余 {data.tracking.warehouseRemaining}）</option>
+                  <option value="WAREHOUSE">
+                    仓库（未编号 {data.tracking.warehouseRemaining} 颗）
+                  </option>
                   <option value="INSTALLED">
-                    已上墙（剩余 {data.tracking.installedRemaining}）
+                    已上墙（未编号 {data.tracking.installedRemaining} 颗）
                   </option>
                 </select>
               </label>
@@ -135,7 +137,7 @@ export function HoldUnitManager(props: {
                 }
                 onClick={() => void register()}
               >
-                {saving ? '建立中…' : '批量建立物理身份'}
+                {saving ? '生成中…' : '批量生成资产编号'}
               </button>
             </div>
           )}
@@ -147,7 +149,7 @@ export function HoldUnitManager(props: {
             </div>
           ) : (
             <p className="hold-unit-empty">
-              还没有建立物理岩点，可先从已核实的库存数量中批量生成。
+              还没有为实物编号，可从已确认的数量中批量生成资产编号。
             </p>
           )}
           {data.total > data.items.length && (

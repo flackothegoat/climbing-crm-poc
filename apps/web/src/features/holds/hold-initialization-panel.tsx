@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, type FormEvent } from 'react';
+import { useEffect, useState, type FormEvent, type ReactNode } from 'react';
 import type { HoldInitializationBatch } from './hold-api';
 
 export function HoldInitializationPanel(props: {
@@ -11,15 +11,39 @@ export function HoldInitializationPanel(props: {
   onCancel: () => Promise<void>;
   onAddRecord: () => void;
 }) {
-  return props.batch ? (
-    <ActiveInitialization
-      batch={props.batch}
-      onCancel={props.onCancel}
-      onComplete={props.onComplete}
-      onAddRecord={props.onAddRecord}
-    />
-  ) : (
-    <StartInitialization loading={props.loading} onStart={props.onStart} />
+  const [open, setOpen] = useState(false);
+  if (props.batch) {
+    return (
+      <ActiveInitialization
+        batch={props.batch}
+        onCancel={props.onCancel}
+        onComplete={props.onComplete}
+        onAddRecord={props.onAddRecord}
+      />
+    );
+  }
+  return (
+    <>
+      <section className="hold-initialization-panel hold-initialization-launcher">
+        <div>
+          <span>盘点工具</span>
+          <h3>首次盘点</h3>
+          <p>新场馆第一次录入岩点数量时使用。</p>
+        </div>
+        <button onClick={() => setOpen(true)}>打开盘点工具</button>
+      </section>
+      {open && (
+        <InitializationDialog onClose={() => setOpen(false)}>
+          <StartInitialization
+            loading={props.loading}
+            onStart={async (name) => {
+              await props.onStart(name);
+              setOpen(false);
+            }}
+          />
+        </InitializationDialog>
+      )}
+    </>
   );
 }
 
@@ -45,11 +69,11 @@ function StartInitialization(props: {
   }
 
   return (
-    <section className="hold-initialization-panel">
+    <div className="hold-initialization-start">
       <div>
-        <span>库存工具</span>
+        <span>盘点工具</span>
         <h3>首次盘点</h3>
-        <p>新场馆第一次录入库存时使用，平时直接新增岩点即可。</p>
+        <p>新场馆第一次录入岩点数量时使用，平时直接新增岩点即可。</p>
       </div>
       <form onSubmit={submit}>
         <input
@@ -64,7 +88,37 @@ function StartInitialization(props: {
         </button>
         {message && <small>{message}</small>}
       </form>
-    </section>
+    </div>
+  );
+}
+
+function InitializationDialog(props: { children: ReactNode; onClose: () => void }) {
+  useEffect(() => {
+    const closeOnEscape = (event: KeyboardEvent) => event.key === 'Escape' && props.onClose();
+    window.addEventListener('keydown', closeOnEscape);
+    return () => window.removeEventListener('keydown', closeOnEscape);
+  }, [props]);
+  return (
+    <div className="hold-action-dialog-backdrop" role="presentation" onMouseDown={props.onClose}>
+      <section
+        aria-label="首次盘点"
+        aria-modal="true"
+        className="hold-action-dialog"
+        role="dialog"
+        onMouseDown={(event) => event.stopPropagation()}
+      >
+        <header>
+          <div>
+            <h3>首次盘点</h3>
+            <p>只在新场馆第一次录入岩点时使用。</p>
+          </div>
+          <button aria-label="关闭首次盘点" onClick={props.onClose}>
+            ×
+          </button>
+        </header>
+        <div className="hold-action-dialog-body">{props.children}</div>
+      </section>
+    </div>
   );
 }
 
@@ -100,8 +154,8 @@ function ActiveInitialization(props: {
         <span>正在盘点</span>
         <h3>{props.batch.name}</h3>
         <p>
-          已确认 {props.batch.entryCount} 组 · 仓库 {props.batch.warehouseQuantity} 件 · 已上墙{' '}
-          {props.batch.installedQuantity} 件
+          已确认 {props.batch.entryCount} 组 · 仓库 {props.batch.warehouseQuantity} 颗 · 已上墙{' '}
+          {props.batch.installedQuantity} 颗
         </p>
         {props.batch.draftScanCount > 0 && (
           <small>{props.batch.draftScanCount} 个扫描草稿待完成</small>

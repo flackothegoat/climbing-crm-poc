@@ -78,7 +78,7 @@ export function CreateHoldRecordDialog(props: {
   return (
     <DialogShell
       title="新增岩点档案"
-      description="扫描和手工录入最终都会生成同一种库存档案。"
+      description="扫描和手工录入最终都会生成同一种岩点档案。"
       onClose={() => void close()}
       wide
     >
@@ -192,7 +192,7 @@ function ScanCreation(props: {
       {props.capture.modelAsset && (
         <HoldSpecificationForm
           context="scan"
-          submitLabel={props.hasBatch ? '创建档案并登记实数' : '创建零库存档案'}
+          submitLabel={props.hasBatch ? '创建档案并登记数量' : '创建零数量档案'}
           onCancel={props.onCancel}
           onSubmit={props.onSubmit}
         />
@@ -211,14 +211,12 @@ function ManualCreation(props: {
   return (
     <>
       {!props.hasBatch && (
-        <p className="hold-record-note">
-          先建立零库存档案；创建后可在档案详情执行到货入库并补充 3D。
-        </p>
+        <p className="hold-record-note">先建立零数量档案；创建后可在档案详情新增数量并补充 3D。</p>
       )}
       {props.hasBatch && <HoldObservedCounts value={props.counts} onChange={props.onCounts} />}
       <HoldSpecificationForm
         context="manual"
-        submitLabel={props.hasBatch ? '创建档案并登记实数' : '创建零库存档案'}
+        submitLabel={props.hasBatch ? '创建档案并登记数量' : '创建零数量档案'}
         onCancel={props.onCancel}
         onSubmit={props.onSubmit}
       />

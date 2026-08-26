@@ -12,6 +12,7 @@ export function HoldSpecificationActions(props: {
   specification: HoldSpecification;
   categoryActive: boolean;
   onChanged: () => Promise<void>;
+  onDeleted?: () => Promise<void>;
 }) {
   const [message, setMessage] = useState('');
   const [deleteOpen, setDeleteOpen] = useState(false);
@@ -61,7 +62,7 @@ export function HoldSpecificationActions(props: {
         <DeleteHoldRecordDialog
           specification={props.specification}
           onClose={() => setDeleteOpen(false)}
-          onDeleted={props.onChanged}
+          onDeleted={props.onDeleted ?? props.onChanged}
         />
       )}
     </div>

@@ -19,7 +19,7 @@ export function calculateInventoryAdjustment(
   if (!/^\d+$/.test(input.trim())) return { valid: false, error: '请输入完整的实际数量' };
   const targetQuantity = Number(input);
   if (!Number.isSafeInteger(targetQuantity) || targetQuantity > MAX_HOLD_QUANTITY) {
-    return { valid: false, error: `实际数量不能超过 ${MAX_HOLD_QUANTITY.toLocaleString()} 件` };
+    return { valid: false, error: `实际数量不能超过 ${MAX_HOLD_QUANTITY.toLocaleString()} 颗` };
   }
   const quantityDelta = targetQuantity - currentQuantity;
   if (!quantityDelta) {
@@ -36,7 +36,7 @@ export function calculateInventoryAdjustment(
     valid: true,
     targetQuantity,
     quantityDelta,
-    changeText: `${increase ? '增加' : '减少'} ${Math.abs(quantityDelta)} 件`,
+    changeText: `${increase ? '增加' : '减少'} ${Math.abs(quantityDelta)} 颗`,
     tone: increase ? 'increase' : 'decrease',
   };
 }

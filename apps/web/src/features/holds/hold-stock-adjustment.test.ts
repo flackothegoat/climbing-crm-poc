@@ -7,13 +7,13 @@ describe('calculateInventoryAdjustment', () => {
       valid: true,
       targetQuantity: 3,
       quantityDelta: -2,
-      changeText: '减少 2 件',
+      changeText: '减少 2 颗',
     });
     expect(calculateInventoryAdjustment(5, '8')).toMatchObject({
       valid: true,
       targetQuantity: 8,
       quantityDelta: 3,
-      changeText: '增加 3 件',
+      changeText: '增加 3 颗',
     });
   });
 

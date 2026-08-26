@@ -53,7 +53,7 @@ export const bucketLabel: Record<string, string> = {
 
 export const movementLabel: Record<string, string> = {
   INITIAL_BALANCE: '初始建档',
-  RECEIPT: '正常入库',
+  RECEIPT: '新增岩点',
   ADJUSTMENT: '库存调整',
   REVERSAL: '撤销入库',
 };

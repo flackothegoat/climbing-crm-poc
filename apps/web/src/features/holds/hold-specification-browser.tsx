@@ -237,7 +237,7 @@ function SpecificationOperations(
           onChanged={props.onChanged}
         />
       ) : (
-        <p className="hold-stopped-note">已停用，暂时不能调整库存。</p>
+        <p className="hold-stopped-note">已停用，暂时不能修改数量。</p>
       )}
       <HoldUnitManager specification={item} disabled={!props.active} onChanged={props.onChanged} />
       {props.canAdjust && (
@@ -276,7 +276,7 @@ function SpecificationHeader({ specification }: { specification: HoldSpecificati
           {climbingColorLabel(specification.color)} · {specification.manufacturer ?? '品牌未填'}
         </small>
       </div>
-      <strong>{specification.inventory.totalQuantity} 件</strong>
+      <strong>总数 {specification.inventory.totalQuantity} 颗</strong>
     </header>
   );
 }

@@ -35,7 +35,7 @@ export function ReverseReceiptControl(props: {
   }
   return (
     <form className="movement-reverse-form" onSubmit={submit}>
-      <p>将从仓库扣减 {props.movement.quantityDelta} 件，原流水会永久保留。</p>
+      <p>将从仓库扣减 {props.movement.quantityDelta} 颗，原记录会永久保留。</p>
       <input
         required
         minLength={2}

@@ -1,5 +1,6 @@
 import { climbingColorCss, climbingColorLabel } from '../common/climbing-colors';
 import type { HoldCategory, HoldSpecification } from './hold-api';
+import { HoldCatalogPreview } from './hold-model-viewer';
 import { gripLabel } from './hold-options';
 
 interface CatalogItem {
@@ -16,17 +17,18 @@ export function HoldTable(props: {
     category.specifications.map((specification) => ({ category, specification })),
   );
   return (
-    <section className="section-card table-card hold-directory-card">
-      <header>
+    <section className="section-card hold-directory-card">
+      <header className="hold-directory-heading">
         <div>
           <h3>岩点档案</h3>
-          <p>一行代表一种可计数的岩点；同款实物通过数量管理，不重复建立档案。</p>
+          <p>按模型快速找到岩点，点击卡片查看这个岩点的完整档案。</p>
         </div>
+        <span>{items.length} 个档案</span>
       </header>
       {props.loading ? (
         <p className="table-empty-state">正在加载岩点档案…</p>
       ) : items.length ? (
-        <CatalogTable items={items} onSelect={props.onSelect} />
+        <CatalogGrid items={items} onSelect={props.onSelect} />
       ) : (
         <p className="table-empty-state">还没有符合条件的岩点档案。</p>
       )}
@@ -34,72 +36,49 @@ export function HoldTable(props: {
   );
 }
 
-function CatalogTable(props: {
+function CatalogGrid(props: {
   items: CatalogItem[];
   onSelect: (category: HoldCategory, specification: HoldSpecification) => void;
 }) {
   return (
-    <div className="management-table-wrap">
-      <table className="management-table hold-table">
-        <thead>
-          <tr>
-            <th>岩点</th>
-            <th>品牌</th>
-            <th>类型 / 尺寸</th>
-            <th>仓库</th>
-            <th>上墙</th>
-            <th>维护</th>
-            <th>总量</th>
-            <th>模型</th>
-            <th aria-label="操作" />
-          </tr>
-        </thead>
-        <tbody>
-          {props.items.map((item) => (
-            <CatalogRow item={item} key={item.specification.id} onSelect={props.onSelect} />
-          ))}
-        </tbody>
-      </table>
+    <div className="hold-catalog-grid">
+      {props.items.map((item) => (
+        <CatalogCard item={item} key={item.specification.id} onSelect={props.onSelect} />
+      ))}
     </div>
   );
 }
 
-function CatalogRow(props: {
+function CatalogCard(props: {
   item: CatalogItem;
   onSelect: (category: HoldCategory, specification: HoldSpecification) => void;
 }) {
   const { category, specification } = props.item;
-  const inventory = specification.inventory;
-  const hasModel = specification.assets.some((asset) => asset.kind === 'MODEL_3D');
   return (
-    <tr className={specification.status === 'ARCHIVED' ? 'is-archived' : ''}>
-      <td>
-        <span className="hold-model-cell">
-          <i style={{ background: climbingColorCss(specification.color) }} />
-          <span>
-            <b>{specification.productName}</b>
-            <small>
-              {climbingColorLabel(specification.color)}
-              {specification.status === 'ARCHIVED' ? ' · 已停用' : ''}
-            </small>
-          </span>
+    <button
+      className={`hold-catalog-card ${specification.status === 'ARCHIVED' ? 'is-archived' : ''}`}
+      onClick={() => props.onSelect(category, specification)}
+      type="button"
+    >
+      <span className="hold-catalog-visual">
+        <HoldCatalogPreview
+          alt={`${specification.productName} 正立面预览`}
+          assets={specification.assets}
+          fallbackColor={climbingColorCss(specification.color)}
+        />
+        <small>{climbingColorLabel(specification.color)}</small>
+        {specification.status === 'ARCHIVED' && <em>已停用</em>}
+      </span>
+      <span className="hold-catalog-copy">
+        <strong>{specification.productName}</strong>
+        <small>{specification.manufacturer || '品牌未填'}</small>
+        <span>
+          <small>
+            {gripLabel[category.gripType]} · {specification.sizeClass}
+          </small>
+          <b>总数 {specification.inventory.totalQuantity}</b>
         </span>
-      </td>
-      <td>{specification.manufacturer ?? '未填写'}</td>
-      <td>
-        <span className="table-primary">{gripLabel[category.gripType]}</span>
-        <small>{specification.sizeClass}</small>
-      </td>
-      <td className="quantity-cell">{inventory.warehouseQuantity}</td>
-      <td className="quantity-cell">{inventory.installedQuantity}</td>
-      <td className="quantity-cell">{inventory.maintenanceQuantity}</td>
-      <td className="quantity-cell quantity-total">{inventory.totalQuantity}</td>
-      <td>{hasModel ? '可查看 3D' : '待补模型'}</td>
-      <td>
-        <button className="table-action" onClick={() => props.onSelect(category, specification)}>
-          查看档案
-        </button>
-      </td>
-    </tr>
+      </span>
+    </button>
   );
 }

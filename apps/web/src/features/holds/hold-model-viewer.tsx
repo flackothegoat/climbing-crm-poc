@@ -6,6 +6,7 @@ import {
   useEffect,
   useRef,
   useState,
+  type CSSProperties,
   type MutableRefObject,
 } from 'react';
 import Image from 'next/image';
@@ -77,6 +78,46 @@ export function HoldAssetGallery({ assets }: { assets: HoldAsset[] }) {
   return <ModelAssetGallery assets={assets} model={model} />;
 }
 
+/** Lightweight catalog surface: use the stored preview and never load every GLB in the grid. */
+export function HoldCatalogPreview(props: {
+  assets: HoldAsset[];
+  alt: string;
+  fallbackColor: string;
+}) {
+  const model = props.assets.find((asset) => asset.kind === 'MODEL_3D' && asset.status === 'READY');
+  const preview = model ? findModelPreview(props.assets, model.id) : null;
+  return preview ? (
+    <CatalogPreviewImage alt={props.alt} asset={preview} />
+  ) : (
+    <div
+      className="hold-catalog-preview-fallback"
+      style={{ '--hold-color': props.fallbackColor } as CSSProperties}
+    >
+      <i />
+      <span>{model ? '3D 预览待生成' : '暂无 3D 模型'}</span>
+    </div>
+  );
+}
+
+function CatalogPreviewImage(props: { asset: HoldAsset; alt: string }) {
+  const assetSource = useAssetSource(props.asset.id);
+  if (!assetSource.source) {
+    return (
+      <div className="hold-catalog-preview-loading">{assetSource.error || '正在加载预览…'}</div>
+    );
+  }
+  return (
+    <Image
+      alt={props.alt}
+      className="hold-catalog-preview-image"
+      fill
+      sizes="(max-width: 760px) 50vw, (max-width: 1200px) 33vw, 240px"
+      src={assetSource.source}
+      unoptimized
+    />
+  );
+}
+
 function ModelProcessingCard({ source }: { source: HoldAsset }) {
   const [job, setJob] = useState(source.processingJob ?? null);
   const [retrying, setRetrying] = useState(false);
@@ -118,7 +159,7 @@ function ModelProcessingCard({ source }: { source: HoldAsset }) {
 }
 
 function processingText(job: HoldModelProcessingJob): string {
-  if (job.status === 'QUEUED') return '已排队；不影响库存档案使用';
+  if (job.status === 'QUEUED') return '已排队；不影响岩点档案使用';
   if (job.status === 'PROCESSING') return '后台正在移除桌面和扫描杂面';
   if (job.status === 'NEEDS_REVIEW') return '模型已生成，等待人工复核';
   if (job.status === 'FAILED') return '自动清理失败；原始模型仍完整保留';
@@ -231,10 +272,10 @@ function PreviewSurface(props: {
 function HoldModelThumbnail({ asset }: { asset: HoldAsset }) {
   const assetSource = useAssetSource(asset.id);
   if (assetSource.error) return <p className="hold-model-error">{assetSource.error}</p>;
-  if (!assetSource.source) return <div className="hold-model-loading">正在加载俯瞰缩略图…</div>;
+  if (!assetSource.source) return <div className="hold-model-loading">正在加载正立面预览…</div>;
   return (
     <Image
-      alt="岩点三维模型俯瞰缩略图"
+      alt="岩点三维模型正立面预览"
       className="hold-model-thumbnail"
       height={holdModelPreviewConfig.height}
       src={assetSource.source}
@@ -252,12 +293,12 @@ function PreviewGenerationStatus(props: { state: PreviewState; onRetry: () => vo
       </button>
     );
   }
-  const text = props.state === 'UPLOADING' ? '正在保存缩略图…' : '正在生成俯瞰缩略图…';
+  const text = props.state === 'UPLOADING' ? '正在保存预览…' : '正在生成正立面预览…';
   return <span className="hold-preview-progress">{text}</span>;
 }
 
 function ModelAssetSummary(props: { model: HoldAsset; previewState: PreviewState }) {
-  const status = props.previewState === 'READY' ? '俯瞰缩略图已生成' : '正在准备缩略图';
+  const status = props.previewState === 'READY' ? '正立面预览已生成' : '正在准备正立面预览';
   return (
     <div>
       <b>3D 模型</b>

@@ -101,7 +101,7 @@ function DeletionWarning({ specification }: { specification: HoldSpecification }
         {buckets.map(([bucket, quantity]) => (
           <div key={bucket}>
             <dt>{bucketLabel[bucket]}</dt>
-            <dd>{quantity} 件</dd>
+            <dd>{quantity} 颗</dd>
           </div>
         ))}
         <div>

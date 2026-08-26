@@ -38,14 +38,14 @@ function StockModeTabs(props: {
         className={props.mode === 'RECEIPT' ? 'is-active' : ''}
         onClick={() => props.onChange('RECEIPT')}
       >
-        到货入库
+        新增岩点
       </button>
       {props.canAdjust && (
         <button
           className={props.mode === 'ADJUSTMENT' ? 'is-active' : ''}
           onClick={() => props.onChange('ADJUSTMENT')}
         >
-          调整库存
+          修改数量
         </button>
       )}
     </nav>
@@ -61,7 +61,7 @@ function ReceiptForm(props: Pick<StockFormProps, 'specification' | 'onChanged'>)
   async function submit(event: React.FormEvent): Promise<void> {
     event.preventDefault();
     const afterQuantity = props.specification.inventory.warehouseQuantity + Number(quantity);
-    if (!window.confirm(`入库后仓库数量将变为 ${afterQuantity} 件，确认继续？`)) return;
+    if (!window.confirm(`新增后仓库数量将变为 ${afterQuantity} 颗，确认继续？`)) return;
     setSubmitting(true);
     setMessage('');
     try {
@@ -75,7 +75,7 @@ function ReceiptForm(props: Pick<StockFormProps, 'specification' | 'onChanged'>)
       await props.onChanged();
       resetRequestState(request.current);
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : '入库失败');
+      setMessage(error instanceof Error ? error.message : '新增失败');
     } finally {
       setSubmitting(false);
     }
@@ -84,7 +84,7 @@ function ReceiptForm(props: Pick<StockFormProps, 'specification' | 'onChanged'>)
   return (
     <form className="hold-receipt-form" onSubmit={submit}>
       <input
-        aria-label="入库数量"
+        aria-label="新增数量"
         required
         min="1"
         max="100000"
@@ -93,7 +93,7 @@ function ReceiptForm(props: Pick<StockFormProps, 'specification' | 'onChanged'>)
         onChange={(event) => setQuantity(event.target.value)}
       />
       <button disabled={submitting} type="submit">
-        {submitting ? '处理中…' : '确认入库'}
+        {submitting ? '处理中…' : '确认新增'}
       </button>
       {message && <p>{message}</p>}
     </form>
@@ -120,7 +120,7 @@ function AdjustmentForm(props: Pick<StockFormProps, 'specification' | 'onChanged
       </label>
       <div className="hold-current-quantity">
         <span>当前数量</span>
-        <strong>{form.currentQuantity} 件</strong>
+        <strong>{form.currentQuantity} 颗</strong>
       </div>
       <TargetQuantityField value={form.targetQuantity} onChange={form.setTargetQuantity} />
       <AdjustmentPreview currentQuantity={form.currentQuantity} result={form.adjustment} />
@@ -184,7 +184,7 @@ function AdjustmentPreview(props: {
     return <p className="hold-adjustment-preview is-error">{props.result.error}</p>;
   return (
     <p className={`hold-adjustment-preview is-${props.result.tone}`}>
-      从 {props.currentQuantity} 件调整为 {props.result.targetQuantity} 件
+      从 {props.currentQuantity} 颗调整为 {props.result.targetQuantity} 颗
       <strong>{props.result.changeText}</strong>
     </p>
   );
@@ -204,7 +204,7 @@ function useAdjustmentForm(props: Pick<StockFormProps, 'specification' | 'onChan
   async function submit(event: React.FormEvent): Promise<void> {
     event.preventDefault();
     if (!adjustment.valid || !adjustment.quantityDelta || !note.trim()) return;
-    const confirmation = `${bucketLabel[bucket]}库存将从 ${current} 件调整为 ${adjustment.targetQuantity} 件（${adjustment.changeText}）。确认调整？`;
+    const confirmation = `${bucketLabel[bucket]}数量将从 ${current} 颗调整为 ${adjustment.targetQuantity} 颗（${adjustment.changeText}）。确认修改？`;
     if (!window.confirm(confirmation)) return;
     setSubmitting(true);
     setMessage('');
@@ -228,7 +228,7 @@ function useAdjustmentForm(props: Pick<StockFormProps, 'specification' | 'onChan
       resetRequestState(request.current);
       setNote('');
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : '库存调整失败');
+      setMessage(error instanceof Error ? error.message : '数量修改失败');
     } finally {
       setSubmitting(false);
     }

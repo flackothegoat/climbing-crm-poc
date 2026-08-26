@@ -91,7 +91,7 @@ function parseObservedCounts(warehouse: string, installed: string, note: string)
 }
 
 function buildConfirmation(warehouse: number, installed: number): string {
-  return `将库存校准为：仓库 ${warehouse} 件，已上墙 ${installed} 件。原流水保留，确认继续？`;
+  return `将数量更新为：仓库 ${warehouse} 颗，已上墙 ${installed} 颗。原记录保留，确认继续？`;
 }
 
 function isCount(value: number): boolean {

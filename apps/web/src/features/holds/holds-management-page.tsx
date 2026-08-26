@@ -4,7 +4,7 @@ import type { FormEvent } from 'react';
 import { useState } from 'react';
 import type { AuthenticatedSession } from '../../lib/server-session';
 import { DashboardIcon } from '../dashboard/dashboard-icons';
-import { PageHeading, StatGrid } from '../dashboard/page-components';
+import { PageHeading } from '../dashboard/page-components';
 import { CreateHoldRecordDialog } from './create-hold-record-dialog';
 import { HoldDetailPanel } from './hold-detail-panel';
 import { HoldInitializationPanel } from './hold-initialization-panel';
@@ -46,44 +46,50 @@ export function HoldsManagementPage({ session }: { session: AuthenticatedSession
       <PageHeading
         eyebrow="岩点管理"
         title="岩点库"
-        description="同款岩点只建一份档案，通过数量管理仓库、上墙和维护状态。"
+        description="每种岩点只建一份档案，用数量记录仓库、上墙和维护状态。"
         aside={
           <button className="page-action page-action-active" onClick={() => openCreateRecord()}>
             <DashboardIcon name="holds" />
-            新增岩点档案
+            新增岩点
           </button>
         }
-      />
-      <HoldInitializationPanel
-        batch={initialization.batch}
-        loading={initialization.loading}
-        onCancel={initialization.cancel}
-        onComplete={initialization.complete}
-        onAddRecord={() => openCreateRecord()}
-        onStart={initialization.start}
       />
       {initialization.error && (
         <RequestFailure message={initialization.error} onRetry={initialization.refresh} />
       )}
-      <StatGrid items={buildStats(data.summary)} />
-      <HoldFilters
-        gripType={gripType}
-        searchDraft={searchDraft}
-        showStopped={showStopped}
-        onGripType={setGripType}
-        onSearchDraft={setSearchDraft}
-        onShowStopped={setShowStopped}
-        onSubmit={submitSearch}
-      />
       {data.error && <RequestFailure message={data.error} onRetry={data.refresh} />}
-      <HoldTable
-        categories={data.categories}
-        loading={data.loading}
-        onSelect={(category, specification) => {
-          setSelectedCategoryId(category.id);
-          setSelectedSpecificationId(specification.id);
-        }}
-      />
+      <div className="hold-library-layout">
+        <main className="hold-library-main">
+          <HoldFilters
+            gripType={gripType}
+            searchDraft={searchDraft}
+            showStopped={showStopped}
+            onGripType={setGripType}
+            onSearchDraft={setSearchDraft}
+            onShowStopped={setShowStopped}
+            onSubmit={submitSearch}
+          />
+          <HoldTable
+            categories={data.categories}
+            loading={data.loading}
+            onSelect={(category, specification) => {
+              setSelectedCategoryId(category.id);
+              setSelectedSpecificationId(specification.id);
+            }}
+          />
+        </main>
+        <aside className="hold-library-aside">
+          <HoldLibrarySummary summary={data.summary} />
+          <HoldInitializationPanel
+            batch={initialization.batch}
+            loading={initialization.loading}
+            onCancel={initialization.cancel}
+            onComplete={initialization.complete}
+            onAddRecord={() => openCreateRecord()}
+            onStart={initialization.start}
+          />
+        </aside>
+      </div>
       {createOpen && (
         <CreateHoldRecordDialog
           batch={initialization.batch}
@@ -134,7 +140,7 @@ function HoldFilters(props: {
     <form className="hold-filters" onSubmit={props.onSubmit}>
       <input
         aria-label="搜索岩点"
-        placeholder="搜索用途、造型或生产商"
+        placeholder="搜索名称、品牌或类型"
         value={props.searchDraft}
         onChange={(event) => props.onSearchDraft(event.target.value)}
       />
@@ -163,21 +169,36 @@ function HoldFilters(props: {
   );
 }
 
-function buildStats(summary: ReturnType<typeof useHoldsData>['summary']) {
-  return [
-    {
-      label: '用途分类',
-      value: String(summary.categoryCount),
-      detail: `${summary.specificationCount} 个岩点档案`,
-      tone: 'accent' as const,
-    },
-    { label: '仓库可用', value: String(summary.warehouseQuantity), detail: '件' },
-    { label: '已上墙', value: String(summary.installedQuantity), detail: '件正在使用' },
-    {
-      label: '待核验',
-      value: String(summary.unverifiedCount),
-      detail: '组库存待确认',
-      tone: 'warning' as const,
-    },
-  ];
+function HoldLibrarySummary(props: { summary: ReturnType<typeof useHoldsData>['summary'] }) {
+  const total =
+    props.summary.warehouseQuantity +
+    props.summary.installedQuantity +
+    props.summary.reservedQuantity +
+    props.summary.maintenanceQuantity;
+  return (
+    <section className="hold-library-summary">
+      <header>
+        <span>岩点概况</span>
+        <b>{props.summary.specificationCount} 个档案</b>
+      </header>
+      <dl>
+        <div>
+          <dt>总数</dt>
+          <dd>{total} 颗</dd>
+        </div>
+        <div>
+          <dt>仓库</dt>
+          <dd>{props.summary.warehouseQuantity} 颗</dd>
+        </div>
+        <div>
+          <dt>已上墙</dt>
+          <dd>{props.summary.installedQuantity} 颗</dd>
+        </div>
+        <div>
+          <dt>待确认</dt>
+          <dd>{props.summary.unverifiedCount} 个档案</dd>
+        </div>
+      </dl>
+    </section>
+  );
 }
