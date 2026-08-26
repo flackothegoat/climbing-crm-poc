@@ -12,6 +12,7 @@ import {
   InventoryMovementType,
 } from '@prisma/client';
 import { z } from 'zod';
+import { databaseIdSchema } from '../common/database-id';
 import { HOLD_LIMITS } from './hold-domain.constants';
 import { rfidIdentifierSchema } from './hold-rfid';
 
@@ -105,9 +106,9 @@ const startInitializationSchema = z.object({
 const createScanSchema = z
   .object({
     mode: z.nativeEnum(HoldScanMode).default(HoldScanMode.CREATE_SPECIFICATION),
-    categoryId: z.string().cuid().optional(),
-    specificationId: z.string().cuid().optional(),
-    initializationBatchId: z.string().cuid().optional(),
+    categoryId: databaseIdSchema.optional(),
+    specificationId: databaseIdSchema.optional(),
+    initializationBatchId: databaseIdSchema.optional(),
   })
   .superRefine((input, context) => {
     if (input.mode === HoldScanMode.CREATE_SPECIFICATION && !input.categoryId) {
@@ -143,7 +144,7 @@ const uploadAssetKindSchema = z
 const previewGenerationVersionSchema = z.coerce.number().int().min(1).max(100);
 
 const initializeSpecificationSchema = z
-  .object({ batchId: z.string().cuid(), ...initializationCountFields })
+  .object({ batchId: databaseIdSchema, ...initializationCountFields })
   .refine(hasInitializedInventory, '仓库与已上墙总数至少为 1');
 
 const createHoldRecordSchema = z.object({

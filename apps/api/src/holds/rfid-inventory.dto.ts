@@ -1,5 +1,6 @@
 import { HoldUnitPhysicalStatus, RfidInventorySessionStatus } from '@prisma/client';
 import { z } from 'zod';
+import { databaseIdSchema } from '../common/database-id';
 import { parseWithSchema } from '../common/zod-validation';
 import { rfidIdentifierSchema } from './hold-rfid';
 
@@ -11,7 +12,7 @@ const listRfidInventorySessionsSchema = z.object({
 const createRfidInventorySessionSchema = z.object({
   requestKey: z.string().uuid(),
   name: z.string().trim().min(2, '请填写盘点名称').max(80),
-  facilityId: z.string().cuid().optional(),
+  facilityId: databaseIdSchema.optional(),
   targetPhysicalStatus: z.enum([
     HoldUnitPhysicalStatus.WAREHOUSE,
     HoldUnitPhysicalStatus.INSTALLED,

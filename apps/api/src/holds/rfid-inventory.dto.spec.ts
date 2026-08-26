@@ -27,6 +27,16 @@ describe('RFID inventory DTO', () => {
     ).toThrow();
   });
 
+  it('接受迁移生成的默认场馆 ID', () => {
+    const parsed = parseCreateRfidInventorySession({
+      requestKey: '33333333-3333-4333-8333-333333333333',
+      name: '默认场馆仓库盘点',
+      facilityId: 'facility_default_918a3b0c-026d-43c8-8155-13bea290c23b',
+      targetPhysicalStatus: 'WAREHOUSE',
+    });
+    expect(parsed.facilityId).toBe('facility_default_918a3b0c-026d-43c8-8155-13bea290c23b');
+  });
+
   it('过期版本不能使用负数绕过', () => {
     expect(() => parseTransitionRfidInventorySession({ expectedVersion: -1 })).toThrow();
   });
