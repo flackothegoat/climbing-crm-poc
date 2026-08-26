@@ -143,6 +143,19 @@ enum RfidTagStatus {
   REPLACED
 }
 
+enum RfidInventorySessionStatus {
+  OPEN
+  COMPLETED
+  CANCELLED
+}
+
+enum RfidInventoryMatchStatus {
+  MATCHED_EXPECTED
+  MATCHED_UNEXPECTED
+  UNBOUND
+  UNKNOWN
+}
+
 enum HoldUnitEventType {
   REGISTERED
   TAG_BOUND
@@ -410,6 +423,9 @@ model Account {
   createdHoldUnitBatches           HoldUnitRegistrationBatch[] @relation("HoldUnitBatchCreator")
   holdUnitEvents                   HoldUnitEvent[]             @relation("HoldUnitEventActor")
   boundHoldUnitTags                HoldUnitTagBinding[]        @relation("HoldUnitTagBinder")
+  createdRfidInventorySessions     RfidInventorySession[]      @relation("RfidInventorySessionCreator")
+  completedRfidInventorySessions   RfidInventorySession[]      @relation("RfidInventorySessionCompleter")
+  createdRfidInventoryReadBatches  RfidInventoryReadBatch[]    @relation("RfidInventoryReadBatchCreator")
   createdAt                        DateTime                    @default(now())
   updatedAt                        DateTime                    @updatedAt
 }
@@ -455,6 +471,8 @@ model Organization {
   rfidTags                    RfidTag[]
   holdUnitRegistrationBatches HoldUnitRegistrationBatch[]
   holdUnitEvents              HoldUnitEvent[]
+  rfidInventorySessions       RfidInventorySession[]
+  rfidInventoryReadBatches    RfidInventoryReadBatch[]
   createdAt                   DateTime                        @default(now())
   updatedAt                   DateTime                        @updatedAt
 }
@@ -606,17 +624,18 @@ model HoldVariant {
 }
 
 model Facility {
-  id                  String                      @id @default(cuid())
-  organizationId      String
-  code                String
-  name                String
-  status              FacilityStatus              @default(ACTIVE)
-  isDefault           Boolean                     @default(false)
-  organization        Organization                @relation(fields: [organizationId], references: [id], onDelete: Restrict)
-  holdUnits           HoldUnit[]
-  registrationBatches HoldUnitRegistrationBatch[]
-  createdAt           DateTime                    @default(now())
-  updatedAt           DateTime                    @updatedAt
+  id                    String                      @id @default(cuid())
+  organizationId        String
+  code                  String
+  name                  String
+  status                FacilityStatus              @default(ACTIVE)
+  isDefault             Boolean                     @default(false)
+  organization          Organization                @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  holdUnits             HoldUnit[]
+  registrationBatches   HoldUnitRegistrationBatch[]
+  rfidInventorySessions RfidInventorySession[]
+  createdAt             DateTime                    @default(now())
+  updatedAt             DateTime                    @updatedAt
 
   @@unique([organizationId, code])
   @@index([organizationId, status])
@@ -644,28 +663,30 @@ model HoldUnitRegistrationBatch {
 }
 
 model HoldUnit {
-  id                             String                    @id @default(cuid())
-  assetCode                      String                    @unique
+  id                             String                      @id @default(cuid())
+  assetCode                      String                      @unique
   holdVariantId                  String
   ownerOrganizationId            String
   currentCustodianOrganizationId String
   currentFacilityId              String
   registrationBatchId            String
   physicalStatus                 HoldUnitPhysicalStatus
-  operationalStatus              HoldUnitOperationalStatus @default(ACTIVE)
-  version                        Int                       @default(0)
+  operationalStatus              HoldUnitOperationalStatus   @default(ACTIVE)
+  version                        Int                         @default(0)
   registeredByAccountId          String
   retiredAt                      DateTime?
-  holdVariant                    HoldVariant               @relation(fields: [holdVariantId], references: [id], onDelete: Restrict)
-  ownerOrganization              Organization              @relation("HoldUnitOwner", fields: [ownerOrganizationId], references: [id], onDelete: Restrict)
-  currentCustodianOrganization   Organization              @relation("HoldUnitCustodian", fields: [currentCustodianOrganizationId], references: [id], onDelete: Restrict)
-  currentFacility                Facility                  @relation(fields: [currentFacilityId], references: [id], onDelete: Restrict)
-  registrationBatch              HoldUnitRegistrationBatch @relation(fields: [registrationBatchId], references: [id], onDelete: Restrict)
-  registeredBy                   Account                   @relation("HoldUnitRegistrar", fields: [registeredByAccountId], references: [id], onDelete: Restrict)
+  holdVariant                    HoldVariant                 @relation(fields: [holdVariantId], references: [id], onDelete: Restrict)
+  ownerOrganization              Organization                @relation("HoldUnitOwner", fields: [ownerOrganizationId], references: [id], onDelete: Restrict)
+  currentCustodianOrganization   Organization                @relation("HoldUnitCustodian", fields: [currentCustodianOrganizationId], references: [id], onDelete: Restrict)
+  currentFacility                Facility                    @relation(fields: [currentFacilityId], references: [id], onDelete: Restrict)
+  registrationBatch              HoldUnitRegistrationBatch   @relation(fields: [registrationBatchId], references: [id], onDelete: Restrict)
+  registeredBy                   Account                     @relation("HoldUnitRegistrar", fields: [registeredByAccountId], references: [id], onDelete: Restrict)
   tagBindings                    HoldUnitTagBinding[]
   events                         HoldUnitEvent[]
-  createdAt                      DateTime                  @default(now())
-  updatedAt                      DateTime                  @updatedAt
+  rfidInventoryObservations      RfidInventoryObservation[]
+  rfidInventoryExpectedUnits     RfidInventoryExpectedUnit[]
+  createdAt                      DateTime                    @default(now())
+  updatedAt                      DateTime                    @updatedAt
 
   @@index([holdVariantId, physicalStatus, operationalStatus])
   @@index([ownerOrganizationId, physicalStatus])
@@ -674,16 +695,18 @@ model HoldUnit {
 }
 
 model RfidTag {
-  id             String               @id @default(cuid())
-  organizationId String
-  technology     RfidTechnology       @default(UHF_EPC_GEN2)
-  epc            String               @unique
-  tid            String?              @unique
-  status         RfidTagStatus        @default(ACTIVE)
-  organization   Organization         @relation(fields: [organizationId], references: [id], onDelete: Restrict)
-  bindings       HoldUnitTagBinding[]
-  createdAt      DateTime             @default(now())
-  updatedAt      DateTime             @updatedAt
+  id                     String                      @id @default(cuid())
+  organizationId         String
+  technology             RfidTechnology              @default(UHF_EPC_GEN2)
+  epc                    String                      @unique
+  tid                    String?                     @unique
+  status                 RfidTagStatus               @default(ACTIVE)
+  organization           Organization                @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  bindings               HoldUnitTagBinding[]
+  inventoryObservations  RfidInventoryObservation[]
+  inventoryExpectedUnits RfidInventoryExpectedUnit[]
+  createdAt              DateTime                    @default(now())
+  updatedAt              DateTime                    @updatedAt
 
   @@index([organizationId, status])
 }
@@ -725,6 +748,87 @@ model HoldUnitEvent {
   @@unique([organizationId, requestKey])
   @@index([holdUnitId, occurredAt])
   @@index([organizationId, occurredAt])
+}
+
+model RfidInventorySession {
+  id                   String                      @id @default(cuid())
+  organizationId       String
+  facilityId           String
+  requestKey           String
+  name                 String
+  targetPhysicalStatus HoldUnitPhysicalStatus
+  status               RfidInventorySessionStatus  @default(OPEN)
+  version              Int                         @default(0)
+  createdByAccountId   String
+  completedByAccountId String?
+  completedAt          DateTime?
+  cancelledAt          DateTime?
+  organization         Organization                @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  facility             Facility                    @relation(fields: [facilityId], references: [id], onDelete: Restrict)
+  createdBy            Account                     @relation("RfidInventorySessionCreator", fields: [createdByAccountId], references: [id], onDelete: Restrict)
+  completedBy          Account?                    @relation("RfidInventorySessionCompleter", fields: [completedByAccountId], references: [id], onDelete: Restrict)
+  observations         RfidInventoryObservation[]
+  expectedUnits        RfidInventoryExpectedUnit[]
+  readBatches          RfidInventoryReadBatch[]
+  createdAt            DateTime                    @default(now())
+  updatedAt            DateTime                    @updatedAt
+
+  @@unique([organizationId, requestKey])
+  @@index([organizationId, status, createdAt])
+  @@index([facilityId, targetPhysicalStatus, status])
+}
+
+model RfidInventoryObservation {
+  id          String                   @id @default(cuid())
+  sessionId   String
+  epc         String
+  matchStatus RfidInventoryMatchStatus
+  rfidTagId   String?
+  holdUnitId  String?
+  readCount   Int                      @default(1)
+  firstSeenAt DateTime                 @default(now())
+  lastSeenAt  DateTime                 @default(now())
+  session     RfidInventorySession     @relation(fields: [sessionId], references: [id], onDelete: Restrict)
+  rfidTag     RfidTag?                 @relation(fields: [rfidTagId], references: [id], onDelete: Restrict)
+  holdUnit    HoldUnit?                @relation(fields: [holdUnitId], references: [id], onDelete: Restrict)
+
+  @@unique([sessionId, epc])
+  @@index([sessionId, matchStatus])
+  @@index([holdUnitId])
+}
+
+model RfidInventoryExpectedUnit {
+  id         String               @id @default(cuid())
+  sessionId  String
+  holdUnitId String
+  rfidTagId  String
+  epc        String
+  session    RfidInventorySession @relation(fields: [sessionId], references: [id], onDelete: Restrict)
+  holdUnit   HoldUnit             @relation(fields: [holdUnitId], references: [id], onDelete: Restrict)
+  rfidTag    RfidTag              @relation(fields: [rfidTagId], references: [id], onDelete: Restrict)
+
+  @@unique([sessionId, holdUnitId])
+  @@unique([sessionId, rfidTagId])
+  @@unique([sessionId, epc])
+  @@index([holdUnitId])
+}
+
+model RfidInventoryReadBatch {
+  id                 String               @id @default(cuid())
+  organizationId     String
+  sessionId          String
+  requestKey         String
+  requestFingerprint String
+  submittedCount     Int
+  uniqueCount        Int
+  createdByAccountId String
+  organization       Organization         @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  session            RfidInventorySession @relation(fields: [sessionId], references: [id], onDelete: Restrict)
+  createdBy          Account              @relation("RfidInventoryReadBatchCreator", fields: [createdByAccountId], references: [id], onDelete: Restrict)
+  createdAt          DateTime             @default(now())
+
+  @@unique([organizationId, requestKey])
+  @@index([sessionId, createdAt])
 }
 
 model HoldInventoryBalance {

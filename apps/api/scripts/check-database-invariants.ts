@@ -266,6 +266,66 @@ const checks = {
          balance."reservedQuantity" + balance."maintenanceQuantity"
        ))
   `,
+  rfidInventorySessionScopeMismatch: `
+    SELECT COUNT(*)::int AS count
+    FROM "RfidInventorySession" session
+    JOIN "Facility" facility ON facility."id" = session."facilityId"
+    WHERE facility."organizationId" <> session."organizationId"
+       OR NOT EXISTS (
+         SELECT 1 FROM "Membership" membership
+         WHERE membership."accountId" = session."createdByAccountId"
+           AND membership."organizationId" = session."organizationId"
+       )
+       OR (session."completedByAccountId" IS NOT NULL AND NOT EXISTS (
+         SELECT 1 FROM "Membership" membership
+         WHERE membership."accountId" = session."completedByAccountId"
+           AND membership."organizationId" = session."organizationId"
+       ))
+  `,
+  rfidInventoryExpectedScopeMismatch: `
+    SELECT COUNT(*)::int AS count
+    FROM "RfidInventoryExpectedUnit" expected
+    JOIN "RfidInventorySession" session ON session."id" = expected."sessionId"
+    JOIN "RfidTag" tag ON tag."id" = expected."rfidTagId"
+    JOIN "HoldUnit" unit ON unit."id" = expected."holdUnitId"
+    WHERE tag."epc" <> expected."epc"
+       OR NOT EXISTS (
+         SELECT 1 FROM "HoldUnitTagBinding" binding
+         WHERE binding."holdUnitId" = unit."id" AND binding."rfidTagId" = tag."id"
+       )
+  `,
+  rfidInventoryObservationScopeMismatch: `
+    SELECT COUNT(*)::int AS count
+    FROM "RfidInventoryObservation" observation
+    JOIN "RfidInventorySession" session ON session."id" = observation."sessionId"
+    LEFT JOIN "RfidTag" tag ON tag."id" = observation."rfidTagId"
+    LEFT JOIN "HoldUnit" unit ON unit."id" = observation."holdUnitId"
+    WHERE (observation."matchStatus" IN ('MATCHED_EXPECTED', 'MATCHED_UNEXPECTED') AND (
+             tag."id" IS NULL OR unit."id" IS NULL OR tag."epc" <> observation."epc"
+             OR NOT EXISTS (
+               SELECT 1 FROM "HoldUnitTagBinding" binding
+               WHERE binding."holdUnitId" = unit."id" AND binding."rfidTagId" = tag."id"
+             )
+           ))
+       OR (observation."matchStatus" = 'UNBOUND' AND (
+             tag."id" IS NULL OR unit."id" IS NOT NULL OR tag."epc" <> observation."epc"
+             OR tag."organizationId" <> session."organizationId"
+           ))
+       OR (observation."matchStatus" = 'UNKNOWN' AND (
+             tag."id" IS NOT NULL OR unit."id" IS NOT NULL
+           ))
+  `,
+  rfidInventoryReadBatchScopeMismatch: `
+    SELECT COUNT(*)::int AS count
+    FROM "RfidInventoryReadBatch" batch
+    JOIN "RfidInventorySession" session ON session."id" = batch."sessionId"
+    WHERE session."organizationId" <> batch."organizationId"
+       OR NOT EXISTS (
+         SELECT 1 FROM "Membership" membership
+         WHERE membership."accountId" = batch."createdByAccountId"
+           AND membership."organizationId" = batch."organizationId"
+       )
+  `,
   wallSettingReservationScopeMismatch: `
     SELECT COUNT(*)::int AS count
     FROM "WallSettingJobHoldReservation" reservation

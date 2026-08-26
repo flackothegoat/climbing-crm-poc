@@ -13,6 +13,7 @@ import {
 } from '@prisma/client';
 import { z } from 'zod';
 import { HOLD_LIMITS } from './hold-domain.constants';
+import { rfidIdentifierSchema } from './hold-rfid';
 
 const optionalText = (max: number) => z.string().trim().max(max).nullable().optional();
 const positiveDimension = z
@@ -164,20 +165,11 @@ const registerHoldUnitsSchema = z.object({
   physicalStatus: z.enum([HoldUnitPhysicalStatus.WAREHOUSE, HoldUnitPhysicalStatus.INSTALLED]),
 });
 
-const rfidIdentifier = z
-  .string()
-  .trim()
-  .transform((value) => value.replace(/[\s:-]/g, '').toUpperCase())
-  .refine(
-    (value) => /^[0-9A-F]{8,128}$/.test(value) && value.length % 2 === 0,
-    'RFID 标识必须是 8 至 128 位偶数长度十六进制字符',
-  );
-
 const bindHoldUnitTagSchema = z.object({
   requestKey: z.string().uuid(),
-  epc: rfidIdentifier,
+  epc: rfidIdentifierSchema,
   tid: z
-    .preprocess((value) => (value === '' ? undefined : value), rfidIdentifier.optional())
+    .preprocess((value) => (value === '' ? undefined : value), rfidIdentifierSchema.optional())
     .optional(),
 });
 

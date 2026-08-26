@@ -12,6 +12,7 @@ import { HoldTable } from './hold-table';
 import { formatGripLabel, gripOptions } from './hold-options';
 import { useHoldsData } from './use-holds-data';
 import { useHoldInitialization } from './use-hold-initialization';
+import { RfidInventoryPanel } from './rfid-inventory-panel';
 
 export function HoldsManagementPage({ session }: { session: AuthenticatedSession }) {
   const [searchDraft, setSearchDraft] = useState('');
@@ -88,6 +89,7 @@ export function HoldsManagementPage({ session }: { session: AuthenticatedSession
             onAddRecord={() => openCreateRecord()}
             onStart={initialization.start}
           />
+          <RfidInventoryPanel />
         </aside>
       </div>
       {createOpen && (

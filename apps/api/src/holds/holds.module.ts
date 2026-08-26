@@ -11,10 +11,12 @@ import { HoldScanService } from './hold-scan.service';
 import { HoldSpecificationService } from './hold-specification.service';
 import { HoldSpecificationWriter } from './hold-specification.writer';
 import { HoldUnitService } from './hold-unit.service';
+import { RfidInventoryController } from './rfid-inventory.controller';
+import { RfidInventoryService } from './rfid-inventory.service';
 
 @Module({
   imports: [AuthModule],
-  controllers: [HoldController],
+  controllers: [HoldController, RfidInventoryController],
   providers: [
     HoldCategoryService,
     HoldSpecificationService,
@@ -26,6 +28,7 @@ import { HoldUnitService } from './hold-unit.service';
     HoldScanService,
     HoldRecordDeletionService,
     HoldUnitService,
+    RfidInventoryService,
   ],
   exports: [HoldInventoryService],
 })

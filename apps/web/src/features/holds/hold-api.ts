@@ -128,6 +128,62 @@ export interface HoldUnitListResponse {
   tracking: HoldUnitTrackingSummary;
 }
 
+export type RfidInventorySessionStatus = 'OPEN' | 'COMPLETED' | 'CANCELLED';
+export type RfidInventoryMatchStatus =
+  'MATCHED_EXPECTED' | 'MATCHED_UNEXPECTED' | 'UNBOUND' | 'UNKNOWN';
+
+export interface RfidInventorySessionListItem {
+  id: string;
+  name: string;
+  status: RfidInventorySessionStatus;
+  targetPhysicalStatus: 'WAREHOUSE' | 'INSTALLED';
+  version: number;
+  facility: { id: string; code: string; name: string };
+  expectedQuantity: number;
+  observedQuantity: number;
+  batchCount: number;
+  createdAt: string;
+  completedAt: string | null;
+  cancelledAt: string | null;
+}
+
+export interface RfidInventorySessionDetail extends RfidInventorySessionListItem {
+  summary: {
+    expectedQuantity: number;
+    observedQuantity: number;
+    totalReads: number;
+    matchedExpected: number;
+    matchedUnexpected: number;
+    unboundQuantity: number;
+    unknownQuantity: number;
+    missingQuantity: number;
+  };
+  observations: Array<{
+    id: string;
+    epc: string;
+    matchStatus: RfidInventoryMatchStatus;
+    readCount: number;
+    firstSeenAt: string;
+    lastSeenAt: string;
+    unit: {
+      id: string;
+      assetCode: string;
+      physicalStatus: HoldUnitPhysicalStatus;
+      facility: { id: string; code: string; name: string };
+      specification: {
+        productName: string;
+        manufacturer: string | null;
+        color: ClimbingColor;
+      };
+    } | null;
+  }>;
+}
+
+export interface RfidInventorySessionListResponse {
+  items: RfidInventorySessionListItem[];
+  facilities: Array<{ id: string; code: string; name: string; isDefault: boolean }>;
+}
+
 export interface HoldCategory {
   id: string;
   code: string;
@@ -425,6 +481,48 @@ export function bindHoldUnitTag(
     method: 'POST',
     body: JSON.stringify(input),
   });
+}
+
+export const getRfidInventorySessions = () =>
+  apiRequest<RfidInventorySessionListResponse>('/holds/rfid-inventory-sessions?pageSize=20');
+
+export const getRfidInventorySession = (sessionId: string) =>
+  apiRequest<RfidInventorySessionDetail>(`/holds/rfid-inventory-sessions/${sessionId}`);
+
+export function createRfidInventorySession(input: {
+  requestKey: string;
+  name: string;
+  facilityId?: string;
+  targetPhysicalStatus: 'WAREHOUSE' | 'INSTALLED';
+}) {
+  return apiRequest<RfidInventorySessionDetail>('/holds/rfid-inventory-sessions', {
+    method: 'POST',
+    body: JSON.stringify(input),
+  });
+}
+
+export function ingestRfidInventoryReads(
+  sessionId: string,
+  input: { requestKey: string; epcs: string[] },
+) {
+  return apiRequest<RfidInventorySessionDetail>(
+    `/holds/rfid-inventory-sessions/${sessionId}/reads`,
+    { method: 'POST', body: JSON.stringify(input) },
+  );
+}
+
+export function completeRfidInventorySession(sessionId: string, expectedVersion: number) {
+  return apiRequest<RfidInventorySessionDetail>(
+    `/holds/rfid-inventory-sessions/${sessionId}/complete`,
+    { method: 'POST', body: JSON.stringify({ expectedVersion }) },
+  );
+}
+
+export function cancelRfidInventorySession(sessionId: string, expectedVersion: number) {
+  return apiRequest<RfidInventorySessionDetail>(
+    `/holds/rfid-inventory-sessions/${sessionId}/cancel`,
+    { method: 'POST', body: JSON.stringify({ expectedVersion }) },
+  );
 }
 
 export const stopHoldCategory = (id: string) =>

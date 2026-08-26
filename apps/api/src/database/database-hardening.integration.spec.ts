@@ -34,6 +34,84 @@ describe.runIf(integrationEnabled)('PostgreSQL 领域约束集成检查', () => 
     ).rejects.toThrow('WallHole geometry/segment/organization mismatch');
   });
 
+  it('数据库拒绝 RFID 盘点引用其他岩馆的场馆', async () => {
+    await expect(
+      prisma.$transaction(async (transaction) => {
+        const first = await createWallFixture(transaction, 'rfid-facility-first');
+        const second = await createWallFixture(transaction, 'rfid-facility-second');
+        const account = await transaction.account.create({
+          data: {
+            email: `integration-${crypto.randomUUID()}@example.com`,
+            passwordHash: 'integration-only',
+          },
+        });
+        await transaction.membership.create({
+          data: {
+            accountId: account.id,
+            organizationId: first.organizationId,
+            role: 'L1_ADMIN',
+          },
+        });
+        const foreignFacility = await transaction.facility.create({
+          data: {
+            organizationId: second.organizationId,
+            code: `FAC-${crypto.randomUUID()}`,
+            name: '其他岩馆场馆',
+          },
+        });
+        await transaction.rfidInventorySession.create({
+          data: {
+            organizationId: first.organizationId,
+            facilityId: foreignFacility.id,
+            requestKey: crypto.randomUUID(),
+            name: '跨馆 RFID 盘点',
+            targetPhysicalStatus: 'WAREHOUSE',
+            createdByAccountId: account.id,
+          },
+        });
+      }),
+    ).rejects.toThrow('RfidInventorySession scope mismatch');
+  });
+
+  it('数据库拒绝非本岩馆成员创建 RFID 盘点', async () => {
+    await expect(
+      prisma.$transaction(async (transaction) => {
+        const first = await createWallFixture(transaction, 'rfid-actor-first');
+        const second = await createWallFixture(transaction, 'rfid-actor-second');
+        const account = await transaction.account.create({
+          data: {
+            email: `integration-${crypto.randomUUID()}@example.com`,
+            passwordHash: 'integration-only',
+          },
+        });
+        await transaction.membership.create({
+          data: {
+            accountId: account.id,
+            organizationId: second.organizationId,
+            role: 'L1_ADMIN',
+          },
+        });
+        const facility = await transaction.facility.create({
+          data: {
+            organizationId: first.organizationId,
+            code: `FAC-${crypto.randomUUID()}`,
+            name: '本岩馆场馆',
+          },
+        });
+        await transaction.rfidInventorySession.create({
+          data: {
+            organizationId: first.organizationId,
+            facilityId: facility.id,
+            requestKey: crypto.randomUUID(),
+            name: '越权 RFID 盘点',
+            targetPhysicalStatus: 'WAREHOUSE',
+            createdByAccountId: account.id,
+          },
+        });
+      }),
+    ).rejects.toThrow('RfidInventorySession creator scope mismatch');
+  });
+
   it('数据库在事务提交时拒绝没有主锚点的线路岩点位置', async () => {
     await expect(
       prisma.$transaction(async (transaction) => {
