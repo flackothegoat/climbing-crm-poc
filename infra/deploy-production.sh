@@ -69,7 +69,7 @@ for container in "$api_container" "$web_container"; do
 done
 
 sudo docker compose --env-file "$env_file" -f "$compose_file" exec -T api \
-  sh -lc 'command -v ffmpeg >/dev/null && wget -qO- http://127.0.0.1:3101/api/health >/dev/null'
+  sh -lc 'command -v ffmpeg >/dev/null && node -e '\''fetch("http://127.0.0.1:3101/api/health").then((response) => process.exit(response.ok ? 0 : 1)).catch(() => process.exit(1))'\'''
 
 printf 'Database backup: %s\n' "$backup_path"
 sudo docker compose --env-file "$env_file" -f "$compose_file" ps
