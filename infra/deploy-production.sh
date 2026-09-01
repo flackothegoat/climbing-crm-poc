@@ -34,6 +34,7 @@ ensure_env_value CAMERA_LIVE_NAME 攀岩墙主摄像头
 ensure_env_value CAMERA_PLAYER_URL "https://${app_domain}/wvp/#/play/share?type=2&url=wss%3A%2F%2F${app_domain}%2Fwvp-media%2Frtp%2F34020000001320000001_34020000001320000001.live.flv%3ForiginTypeStr%3Drtp_push%26videoCodec%3DH264"
 ensure_env_value CAMERA_RESOURCE_URL "wss://${app_domain}/${stream_path}"
 ensure_env_value CAMERA_PROBE_URL "https://${app_domain}/${stream_path}"
+ensure_env_value CAMERA_WORKER_RESOURCE_URL "http://media/${stream_path#wvp-media/}"
 ensure_env_value CAMERA_PROBE_TIMEOUT_MS 4000
 ensure_env_value CAMERA_PROBE_CACHE_MS 10000
 ensure_env_value CAMERA_SNAPSHOT_TIMEOUT_MS 20000
@@ -50,6 +51,8 @@ sudo docker compose --env-file "$env_file" -f "$compose_file" build api web
 sudo docker compose --env-file "$env_file" -f "$compose_file" run --rm api \
   pnpm --filter @climbing-crm/api prisma migrate deploy
 sudo docker compose --env-file "$env_file" -f "$compose_file" up -d
+sudo docker compose --env-file "$env_file" -f "$compose_file" exec -T caddy \
+  caddy validate --config /etc/caddy/Caddyfile
 
 api_container="$(sudo docker compose --env-file "$env_file" -f "$compose_file" ps -q api)"
 web_container="$(sudo docker compose --env-file "$env_file" -f "$compose_file" ps -q web)"

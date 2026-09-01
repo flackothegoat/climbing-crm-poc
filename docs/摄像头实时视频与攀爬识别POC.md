@@ -36,6 +36,7 @@ CAMERA_LIVE_NAME=攀岩墙主摄像头
 CAMERA_PLAYER_URL='https://.../wvp/#/play/share?type=2&url=...'
 CAMERA_RESOURCE_URL=wss://.../wvp-media/rtp/...live.flv?originTypeStr=rtp_push&videoCodec=H264
 CAMERA_PROBE_URL=https://.../wvp-media/rtp/...live.flv?originTypeStr=rtp_push&videoCodec=H264
+CAMERA_WORKER_RESOURCE_URL=http://media/rtp/...live.flv?originTypeStr=rtp_push&videoCodec=H264
 CAMERA_PROBE_TIMEOUT_MS=4000
 CAMERA_PROBE_CACHE_MS=10000
 NEXT_PUBLIC_SAM_MODEL_ID=Xenova/slimsam-77-uniform
@@ -109,7 +110,7 @@ CAMERA_WORKER_ORGANIZATION_ID=<API 端绑定的岩馆组织 ID>
 
 摄像头发生 PTZ、变焦、分辨率或安装位置变化后，必须停止 Worker、删除其输出目录中的 `live-reference.jpg`，重新生成参考帧并复核标定区域。
 
-Worker 已提供独立 `Dockerfile`、带心跳/线路数校验的健康检查和 `infra/compose.vision-worker.yaml`。生产环境使用独立 Compose 项目，但加入主应用内部网络；因此没有公网 Worker 端口，也不会复制 API 凭据到镜像。部署脚本会生成权限为 `600` 的 `worker.env`，让 API 绑定明确的组织，再构建、启动并验证 Worker 与已发布线路定义：
+Worker 已提供独立 `Dockerfile`、带心跳/线路数校验的健康检查和 `infra/compose.vision-worker.yaml`。生产环境使用独立 Compose 项目，同时加入主应用网络和 GB28181 媒体网络：API 写回走主应用内网，HTTP-FLV 解码走 `media:80`，不再经过公网域名回环。Worker 不开放公网端口，也不会复制 API 凭据到镜像。部署脚本会生成权限为 `600` 的 `worker.env`，让 API 绑定明确的组织，再构建、启动并验证 Worker 与已发布线路定义：
 
 ```bash
 sudo /opt/climbing-demo/infra/deploy-vision-worker.sh \

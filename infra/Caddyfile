@@ -7,6 +7,16 @@
   @wallAssets path /walls/*
   header @wallAssets >Cache-Control "public, max-age=86400, stale-while-revalidate=604800"
 
+  handle_path /wvp-media/* {
+    reverse_proxy media:80 {
+      flush_interval -1
+    }
+  }
+
+  handle_path /wvp/* {
+    reverse_proxy wvp-ui:8080
+  }
+
   @backend path /backend/*
   handle @backend {
     header >Cache-Control "private, no-store"

@@ -47,11 +47,15 @@ if [[ -z "$camera_resource_url" ]]; then
   printf 'CAMERA_RESOURCE_URL is not configured in %s\n' "$env_file" >&2
   exit 1
 fi
+worker_resource_url="$(read_env_value CAMERA_WORKER_RESOURCE_URL)"
+if [[ -z "$worker_resource_url" ]]; then
+  worker_resource_url="$camera_resource_url"
+fi
 
 install -d -m 700 "$runtime_dir" "$runtime_dir/output/live-worker"
 umask 077
 printf '%s\n' \
-  "CAMERA_RESOURCE_URL=${camera_resource_url}" \
+  "CAMERA_RESOURCE_URL=${worker_resource_url}" \
   'CAMERA_WORKER_API_URL=http://api:3101/api' \
   "CAMERA_WORKER_TOKEN=${worker_token}" \
   'CAMERA_ROUTE_REFRESH_SECONDS=30' \

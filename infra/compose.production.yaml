@@ -122,9 +122,13 @@ services:
         condition: service_healthy
     networks:
       - internal
+      - media
 
 networks:
   internal:
+  media:
+    external: true
+    name: ${GB28181_DOCKER_NETWORK:-gb28181-poc_gb-net}
 
 volumes:
   postgres-data:

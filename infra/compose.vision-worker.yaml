@@ -12,9 +12,13 @@ services:
       - ${CAMERA_WORKER_OUTPUT_DIR:-/opt/climbing-vision-worker/output/live-worker}:/worker/output/live-worker
     networks:
       - production
+      - media
     mem_limit: 3g
 
 networks:
   production:
     external: true
     name: ${CAMERA_WORKER_DOCKER_NETWORK:-climbing-crm-poc-production_internal}
+  media:
+    external: true
+    name: ${GB28181_DOCKER_NETWORK:-gb28181-poc_gb-net}
