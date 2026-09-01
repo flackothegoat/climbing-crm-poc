@@ -49,6 +49,20 @@ export interface CameraObservation {
 export const getCameraObservations = () =>
   apiRequest<{ items: CameraObservation[] }>('/camera/observations?pageSize=12');
 
+export interface CameraWorkerStatus {
+  status: 'ONLINE' | 'OFFLINE' | 'NOT_CONFIGURED';
+  configured: boolean;
+  heartbeat: {
+    status: 'ONLINE' | 'OFFLINE';
+    detail: string;
+    activeAttempt?: string | null;
+    routeDefinitionCount: number;
+    checkedAt: string;
+  } | null;
+}
+
+export const getCameraWorkerStatus = () => apiRequest<CameraWorkerStatus>('/camera/worker-status');
+
 export interface CameraRoutePoint {
   x: number;
   y: number;

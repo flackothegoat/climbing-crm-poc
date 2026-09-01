@@ -10,6 +10,7 @@ import { parseSaveCameraRouteDefinition } from './camera-route-definition.dto';
 import { CameraRouteDefinitionService } from './camera-route-definition.service';
 import { CameraService } from './camera.service';
 import { CameraSnapshotService } from './camera-snapshot.service';
+import { CameraWorkerStatusService } from './camera-worker-status.service';
 
 @ApiTags('camera')
 @ApiCookieAuth()
@@ -21,12 +22,19 @@ export class CameraController {
     private readonly observations: CameraObservationService,
     private readonly routeDefinitions: CameraRouteDefinitionService,
     private readonly snapshots: CameraSnapshotService,
+    private readonly workerStatus: CameraWorkerStatusService,
   ) {}
 
   @Get('live')
   @ApiOperation({ summary: '读取当前岩馆的只读实时摄像头播放配置' })
   live(@CurrentSessionContext() session: CurrentSession) {
     return this.camera.live(session);
+  }
+
+  @Get('worker-status')
+  @ApiOperation({ summary: '读取视觉 Worker 最近一次真实心跳和监控线路数量' })
+  workerStatusSnapshot(@CurrentSessionContext() session: CurrentSession) {
+    return this.workerStatus.get(session);
   }
 
   @Get('snapshot')

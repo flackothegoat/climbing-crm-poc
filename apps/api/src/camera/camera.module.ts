@@ -7,6 +7,7 @@ import { CameraService } from './camera.service';
 import { CameraSnapshotService } from './camera-snapshot.service';
 import { CameraWorkerController } from './camera-worker.controller';
 import { CameraWorkerGuard } from './camera-worker.guard';
+import { CameraWorkerStatusService } from './camera-worker-status.service';
 
 @Module({
   imports: [AuthModule],
@@ -17,6 +18,7 @@ import { CameraWorkerGuard } from './camera-worker.guard';
     CameraObservationService,
     CameraRouteDefinitionService,
     CameraWorkerGuard,
+    CameraWorkerStatusService,
   ],
 })
 export class CameraModule {}

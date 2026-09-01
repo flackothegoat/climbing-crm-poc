@@ -13,6 +13,7 @@ fi
 
 postgres_password="$(openssl rand -hex 32)"
 minio_password="$(openssl rand -hex 32)"
+camera_worker_token="$(openssl rand -hex 32)"
 
 umask 077
 printf '%s\n' \
@@ -37,6 +38,8 @@ printf '%s\n' \
   'CAMERA_SNAPSHOT_TIMEOUT_MS=20000' \
   'CAMERA_SNAPSHOT_CACHE_MS=5000' \
   'CAMERA_SNAPSHOT_STALE_MS=300000' \
+  "CAMERA_WORKER_TOKEN=${camera_worker_token}" \
+  'CAMERA_WORKER_ORGANIZATION_ID=CONFIGURE_AFTER_FIRST_ORGANIZATION' \
   > "$env_file"
 
 chmod 600 "$env_file"

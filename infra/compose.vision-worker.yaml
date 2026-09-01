@@ -1,0 +1,20 @@
+name: climbing-vision-worker
+
+services:
+  vision-worker:
+    build:
+      context: ../services/vision-worker
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    env_file:
+      - ${CAMERA_WORKER_ENV_FILE:-/opt/climbing-vision-worker/worker.env}
+    volumes:
+      - ${CAMERA_WORKER_OUTPUT_DIR:-/opt/climbing-vision-worker/output/live-worker}:/worker/output/live-worker
+    networks:
+      - production
+    mem_limit: 3g
+
+networks:
+  production:
+    external: true
+    name: ${CAMERA_WORKER_DOCKER_NETWORK:-climbing-crm-poc-production_internal}

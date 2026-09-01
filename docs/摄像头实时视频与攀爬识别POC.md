@@ -39,6 +39,8 @@ CAMERA_PROBE_URL=https://.../wvp-media/rtp/...live.flv?originTypeStr=rtp_push&vi
 CAMERA_PROBE_TIMEOUT_MS=4000
 CAMERA_PROBE_CACHE_MS=10000
 NEXT_PUBLIC_SAM_MODEL_ID=Xenova/slimsam-77-uniform
+CAMERA_WORKER_TOKEN=<至少 32 字符随机值>
+CAMERA_WORKER_ORGANIZATION_ID=<岩馆组织 ID>
 ```
 
 `GET /api/camera/live` 会通过 `CAMERA_PROBE_URL` 建立短时 HTTPS-FLV 连接，并以“在超时时限内实际读取到媒体字节”作为在线依据。结果缓存 10 秒，避免每次页面刷新都新建长连接。iframe 的 `onload` 只表示播放器页面载入，两种状态在界面中分开显示。
@@ -71,9 +73,53 @@ API 会验证线路版本属于当前组织，墙段属于该线路版本。相�
 
 离线脚本会额外生成 `observation-analysis.json`，内容可直接作为请求中的 `analysis`。Worker 仍需从业务系统选择实际的 `routeId`、`routeVersionId` 和可选 `wallSegmentId`，并补充 `requestKey`、`observedAt` 后提交，避免仅凭画面颜色猜测业务线路。
 
+## 实时 Worker
+
+`services/vision-worker/live_stream_worker.py` 已提供：
+
+- WSS-FLV 到 HTTPS-FLV 的 FFmpeg 兼容转换；
+- 断线重连和 `status.json` 心跳；
+- 640×360、8 FPS 分析采样；
+- 无人持续 2 秒时固化 `live-reference.jpg` 空墙参考，避免用攀爬者画面建立颜色 mask；
+- 攀爬者进入/离开检测、3 秒预录和最长 90 秒尝试切片；
+- 后台调用现有起步、终点、异色和掉落算法；
+- 稳定幂等键及受保护 API 回写。
+- 通过 `GET /api/camera/worker/route-definitions` 读取全部用户确认线路；对每段尝试验证各线路起点，并按线路接触比例和结果置信度选择最匹配线路。
+
+只读探测：
+
+```bash
+cd services/vision-worker
+python live_stream_worker.py \
+  --stream-url "$CAMERA_RESOURCE_URL" \
+  --probe-seconds 5
+```
+
+持续运行前必须配置实际业务 ID：
+
+```dotenv
+CAMERA_WORKER_API_URL=http://api:3101/api
+CAMERA_WORKER_TOKEN=<与 API 相同的至少 32 字符随机值>
+CAMERA_WORKER_ORGANIZATION_ID=<API 端绑定的岩馆组织 ID>
+# 多线路模式从 API 自动读取线路 ID；以下只用于兼容旧的单线路模式：
+# CAMERA_ROUTE_ID=
+# CAMERA_ROUTE_VERSION_ID=
+# CAMERA_WALL_SEGMENT_ID=
+```
+
+摄像头发生 PTZ、变焦、分辨率或安装位置变化后，必须停止 Worker、删除其输出目录中的 `live-reference.jpg`，重新生成参考帧并复核标定区域。
+
+Worker 已提供独立 `Dockerfile`、带心跳/线路数校验的健康检查和 `infra/compose.vision-worker.yaml`。生产环境使用独立 Compose 项目，但加入主应用内部网络；因此没有公网 Worker 端口，也不会复制 API 凭据到镜像。部署脚本会生成权限为 `600` 的 `worker.env`，让 API 绑定明确的组织，再构建、启动并验证 Worker 与已发布线路定义：
+
+```bash
+sudo /opt/climbing-demo/infra/deploy-vision-worker.sh \
+  /opt/climbing-demo \
+  <岩馆组织 ID> \
+  /opt/climbing-vision-worker
+```
+
 ## 尚未完成
 
-- 将服务器侧实时算法 Worker 接入已确认的生产线路定义；
 - 在有人现场攀爬时完成一次真实流端到端观察写入；
 - 录像证据片段写入对象存储；
 - UI 内人工纠正和 `correctsObservationId` 流程；
@@ -82,4 +128,4 @@ API 会验证线路版本属于当前组织，墙段属于该线路版本。相�
 - 全局“一键候选”仍是传统颜色连通域算法；精确修正已接入 SlimSAM，但严重遮挡、反光、极低对比和没有紧框的密集岩点仍可能需要重新框选或使用合并轮廓。后续应保存用户修正样本，评估专用岩点分割模型。
 - 第一版会对候选线路逐条运行状态机，线路数量增加时分析延迟近似线性增长；后续应把一次姿态推理结果复用于全部线路状态机。
 
-离线算法与三段录像结果见 `/Users/flacko/Documents/Codex/SummerIntern/vision-poc/CAMERA_POC_REPORT.md`。
+早期离线算法实验仍保留在工作区同级的 `vision-poc` 目录；生产运行代码以本仓库 `services/vision-worker` 为准。

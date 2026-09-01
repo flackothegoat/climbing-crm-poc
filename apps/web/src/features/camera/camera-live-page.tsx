@@ -4,8 +4,10 @@ import { useEffect, useState } from 'react';
 import {
   getCameraObservations,
   getCameraLiveConfiguration,
+  getCameraWorkerStatus,
   type CameraObservation,
   type CameraLiveConfiguration,
+  type CameraWorkerStatus,
 } from './camera-live-api';
 import { CameraRouteConfigurator } from './camera-route-configurator';
 import styles from './camera-live.module.css';
@@ -18,12 +20,14 @@ export function CameraLivePage() {
   const [playerState, setPlayerState] = useState<PlayerState>('LOADING');
   const [playerKey, setPlayerKey] = useState(0);
   const [observations, setObservations] = useState<CameraObservation[]>([]);
+  const [workerStatus, setWorkerStatus] = useState<CameraWorkerStatus | null>(null);
 
   useEffect(() => {
-    Promise.all([getCameraLiveConfiguration(), getCameraObservations()])
-      .then(([camera, recent]) => {
+    Promise.all([getCameraLiveConfiguration(), getCameraObservations(), getCameraWorkerStatus()])
+      .then(([camera, recent, worker]) => {
         setConfiguration(camera);
         setObservations(recent.items);
+        setWorkerStatus(worker);
       })
       .catch((error: unknown) =>
         setMessage(error instanceof Error ? error.message : '摄像头配置加载失败'),
@@ -131,8 +135,8 @@ export function CameraLivePage() {
           </section>
           <section>
             <small>识别能力</small>
-            <strong>视觉线路配置已就绪</strong>
-            <p>服务器侧实时算法 Worker 尚未启用；当前不会生成模拟攀爬结果。</p>
+            <strong>{workerStatusLabel(workerStatus)}</strong>
+            <p>{workerStatusDetail(workerStatus)}</p>
           </section>
         </aside>
       </section>
@@ -199,6 +203,22 @@ function ObservationList({ observations }: { observations: CameraObservation[] }
       )}
     </section>
   );
+}
+
+function workerStatusLabel(status: CameraWorkerStatus | null) {
+  if (status?.status === 'ONLINE') return '实时算法监控中';
+  if (status?.status === 'OFFLINE') return '算法 Worker 离线';
+  if (status?.status === 'NOT_CONFIGURED') return '算法 Worker 未配置';
+  return '正在读取 Worker 状态';
+}
+
+function workerStatusDetail(status: CameraWorkerStatus | null) {
+  const heartbeat = status?.heartbeat;
+  if (!heartbeat) return '尚未收到实时算法心跳，不会把离线基线当作在线状态。';
+  const attempt = heartbeat.activeAttempt ? ` · 正在记录 ${heartbeat.activeAttempt}` : '';
+  return `${heartbeat.detail} · 监控 ${heartbeat.routeDefinitionCount} 条线路${attempt} · ${new Date(
+    heartbeat.checkedAt,
+  ).toLocaleString('zh-CN')}`;
 }
 
 function outcomeLabel(outcome: CameraObservation['outcome']) {
