@@ -8,11 +8,29 @@ from live_stream_worker import (
     ClipJob,
     WorkerSettings,
     build_observation_request,
+    load_worker_calibration,
     normalize_stream_url,
 )
 
 
 class LiveStreamWorkerTest(unittest.TestCase):
+    def test_loads_route_independent_defaults_for_api_managed_routes(self) -> None:
+        calibration = load_worker_calibration(
+            Path(__file__).with_name("worker-defaults.json"),
+            api_managed_routes=True,
+        )
+
+        self.assertEqual(calibration["analysis_resolution"], [640, 360])
+        self.assertNotIn("route_id", calibration)
+        self.assertNotIn("start_zones", calibration)
+
+    def test_rejects_route_independent_defaults_in_legacy_mode(self) -> None:
+        with self.assertRaisesRegex(ValueError, "route-specific calibration"):
+            load_worker_calibration(
+                Path(__file__).with_name("worker-defaults.json"),
+                api_managed_routes=False,
+            )
+
     def test_normalizes_wss_flv_for_ffmpeg(self) -> None:
         self.assertEqual(
             normalize_stream_url("wss://camera.example/live.flv?codec=H264"),

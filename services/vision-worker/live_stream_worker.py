@@ -192,7 +192,12 @@ def parse_args() -> WorkerSettings:
     parser.add_argument(
         "--calibration",
         type=Path,
-        default=Path("calibrations/yellow-route-camera.json"),
+        default=Path(
+            os.getenv(
+                "CAMERA_WORKER_CALIBRATION_PATH",
+                "worker-defaults.json",
+            )
+        ),
     )
     parser.add_argument("--model", type=Path, default=Path("models/yolo11n-pose.pt"))
     parser.add_argument("--output", type=Path, default=Path("output/live-worker"))
@@ -315,7 +320,11 @@ def normalize_stream_url(value: str) -> str:
 
 def main() -> None:
     settings = parse_args()
-    calibration = json.loads(settings.calibration_path.read_text(encoding="utf-8"))
+    route_definitions = RouteDefinitionProvider(settings)
+    calibration = load_worker_calibration(
+        settings.calibration_path,
+        api_managed_routes=route_definitions.enabled,
+    )
     resolution = calibration.get("analysis_resolution", [640, 360])
     target_size = (int(resolution[0]), int(resolution[1]))
     settings.output_path.mkdir(parents=True, exist_ok=True)
@@ -324,7 +333,6 @@ def main() -> None:
         probe_stream(settings.stream_url, target_size, settings.probe_seconds)
         return
 
-    route_definitions = RouteDefinitionProvider(settings)
     route_definitions.start()
     if route_definitions.enabled:
         print(
@@ -384,6 +392,58 @@ def main() -> None:
         jobs.join()
         jobs.put(None)
         analyzer.join(timeout=5)
+
+
+def load_worker_calibration(
+    path: Path,
+    *,
+    api_managed_routes: bool,
+) -> dict[str, Any]:
+    """Load shared algorithm thresholds and reject incomplete legacy configuration."""
+    if not path.is_file():
+        raise FileNotFoundError(f"Worker calibration file does not exist: {path}")
+    calibration = json.loads(path.read_text(encoding="utf-8"))
+    required_shared_fields = {
+        "analysis_resolution",
+        "processing_fps",
+        "reference_time_s",
+        "climber_roi",
+        "wall_roi",
+        "pose_visibility_threshold",
+        "start_dwell_seconds",
+        "finish_dwell_seconds",
+        "finish_hand_tolerance_seconds",
+        "contact_dwell_seconds",
+        "contact_radius_px",
+        "off_route_contact_radius_px",
+        "off_route_failure_ratio",
+        "hand_extension_ratio",
+        "fall_window_seconds",
+        "fall_min_drop_normalized",
+        "fall_min_hip_y",
+    }
+    missing = sorted(required_shared_fields.difference(calibration))
+    if missing:
+        raise ValueError(
+            f"Worker calibration is missing shared fields: {', '.join(missing)}"
+        )
+    if not api_managed_routes:
+        required_route_fields = {
+            "wall_id",
+            "route_id",
+            "start_zones",
+        }
+        missing_route_fields = sorted(required_route_fields.difference(calibration))
+        has_finish = bool(
+            calibration.get("finish_zones") or calibration.get("finish_zone")
+        )
+        if missing_route_fields or not has_finish:
+            details = missing_route_fields + ([] if has_finish else ["finish_zones"])
+            raise ValueError(
+                "Legacy single-route mode requires route-specific calibration fields: "
+                + ", ".join(details)
+            )
+    return calibration
 
 
 def probe_stream(stream_url: str, target_size: tuple[int, int], seconds: float) -> None:

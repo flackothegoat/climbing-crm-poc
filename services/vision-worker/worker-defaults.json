@@ -1,0 +1,23 @@
+{
+  "schema_version": 1,
+  "notes": "Route-independent defaults for the API-managed fixed-camera worker. Route geometry is always supplied by the business API.",
+  "reference_time_s": 0.0,
+  "analysis_resolution": [640, 360],
+  "climber_roi": [0.0, 0.0, 1.0, 1.0],
+  "wall_roi": [0.0, 0.0, 1.0, 1.0],
+  "processing_fps": 8.0,
+  "pose_visibility_threshold": 0.2,
+  "start_dwell_seconds": 0.35,
+  "finish_dwell_seconds": 0.25,
+  "finish_hand_tolerance_seconds": 0.75,
+  "contact_dwell_seconds": 0.5,
+  "contact_radius_px": 11,
+  "off_route_contact_radius_px": 4,
+  "off_route_failure_ratio": 0.13,
+  "hand_extension_ratio": 0.22,
+  "fall_window_seconds": 0.9,
+  "fall_min_drop_normalized": 0.12,
+  "fall_min_hip_y": 0.61,
+  "forbidden_saturation_min": 48,
+  "forbidden_dark_value_max": 92
+}
