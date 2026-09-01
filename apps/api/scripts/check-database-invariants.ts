@@ -119,6 +119,33 @@ const checks = {
            AND scope."organizationId" = point."organizationId"
        )
   `,
+  cameraRouteDefinitionScopeMismatch: `
+    SELECT COUNT(*)::int AS count
+    FROM "CameraRouteDefinition" definition
+    JOIN "Route" route ON route."id" = definition."routeId"
+    JOIN "RouteVersion" version ON version."id" = definition."routeVersionId"
+    JOIN "WallSegment" segment ON segment."id" = definition."wallSegmentId"
+    WHERE route."organizationId" <> definition."organizationId"
+       OR version."organizationId" <> definition."organizationId"
+       OR version."routeId" <> definition."routeId"
+       OR segment."organizationId" <> definition."organizationId"
+       OR NOT EXISTS (
+         SELECT 1 FROM "RouteVersionWallSegment" scope
+         WHERE scope."routeVersionId" = definition."routeVersionId"
+           AND scope."wallSegmentId" = definition."wallSegmentId"
+           AND scope."organizationId" = definition."organizationId"
+       )
+       OR NOT EXISTS (
+         SELECT 1 FROM "Membership" membership
+         WHERE membership."accountId" = definition."createdByAccountId"
+           AND membership."organizationId" = definition."organizationId"
+       )
+       OR NOT EXISTS (
+         SELECT 1 FROM "Membership" membership
+         WHERE membership."accountId" = definition."updatedByAccountId"
+           AND membership."organizationId" = definition."organizationId"
+       )
+  `,
   placementScopeMismatch: `
     SELECT COUNT(*)::int AS count
     FROM "RouteHoldPlacement" placement

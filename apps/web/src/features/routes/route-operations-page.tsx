@@ -2,7 +2,7 @@
 
 import Image from 'next/image';
 import QRCode from 'qrcode';
-import { useEffect, useState, type FormEvent } from 'react';
+import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import { PageHeading, SectionCard, StatGrid, StatusBadge } from '../dashboard/page-components';
 import {
   climbingColorCss,
@@ -11,12 +11,14 @@ import {
   type ClimbingColor,
 } from '../common/climbing-colors';
 import {
-  createOperationalRoute,
   createOperationalWall,
+  deleteOperationalRoute,
   getOperationalRoutes,
   getRouteContext,
   publishOperationalRoute,
   retireOperationalRoute,
+  restoreOperationalRoute,
+  routePhotoUrl,
   updateOperationalRoute,
   uploadRoutePhoto,
   type OperationalRoute,
@@ -25,20 +27,6 @@ import {
 } from './route-operations-api';
 import styles from './routes.module.css';
 import { RouteAnalyticsPage } from './route-analytics-page';
-import { RouteVisualWorkspace } from './route-visual-workspace';
-
-const emptyForm: RouteInput = {
-  code: '',
-  name: '',
-  description: '',
-  color: 'GREEN',
-  grade: 'V3',
-  gradeSystem: 'V',
-  styleTags: [],
-  setterMembershipId: null,
-  wallSegmentIds: [],
-  expectedRetireAt: null,
-};
 
 export function RouteOperationsPage() {
   const [routes, setRoutes] = useState<OperationalRoute[]>([]);
@@ -48,8 +36,9 @@ export function RouteOperationsPage() {
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState<OperationalRoute | null>(null);
   const [qrRoute, setQrRoute] = useState<OperationalRoute | null>(null);
-  const [visualRoute, setVisualRoute] = useState<OperationalRoute | null>(null);
   const [view, setView] = useState<'CATALOG' | 'ANALYTICS'>('CATALOG');
+  const [routeQuery, setRouteQuery] = useState('');
+  const [statusFilter, setStatusFilter] = useState<'ALL' | 'PUBLISHED' | 'INACTIVE'>('ALL');
 
   async function refresh() {
     setLoading(true);
@@ -71,8 +60,19 @@ export function RouteOperationsPage() {
   useEffect(() => void refresh(), []);
 
   const active = routes.filter((route) => route.status === 'PUBLISHED').length;
-  const drafts = routes.filter((route) => route.status === 'DRAFT').length;
+  const inactive = routes.filter((route) => route.status === 'INACTIVE').length;
   const feedback = routes.reduce((sum, route) => sum + route.feedbackCount, 0);
+  const visibleRoutes = useMemo(() => {
+    const query = routeQuery.trim().toLowerCase();
+    return routes.filter(
+      (route) =>
+        (statusFilter === 'ALL' || route.status === statusFilter) &&
+        (!query ||
+          [route.code, route.name, route.grade, climbingColorLabel(route.color)].some((value) =>
+            value.toLowerCase().includes(query),
+          )),
+    );
+  }, [routeQuery, routes, statusFilter]);
 
   function edit(route: OperationalRoute) {
     setEditing(route);
@@ -105,34 +105,22 @@ export function RouteOperationsPage() {
     <div className="page-stack">
       <PageHeading
         eyebrow="第一阶段 · 线路数字化"
-        title="线路运营"
-        description="完成线路建档、W03–W05 视觉定位、发布二维码、会员反馈和复盘。"
+        title="线路库"
+        description="浏览、查询和维护从真实墙面视觉配置创建的线路。"
         aside={
-          <div className={styles.headingActions}>
-            <button
-              className={styles.secondaryButton}
-              type="button"
-              onClick={() => setView('ANALYTICS')}
-            >
-              反馈与复盘
-            </button>
-            <button
-              className={styles.primaryButton}
-              type="button"
-              onClick={() => {
-                setEditing(null);
-                setShowForm(true);
-              }}
-            >
-              新建线路
-            </button>
-          </div>
+          <button
+            className={styles.secondaryButton}
+            type="button"
+            onClick={() => setView('ANALYTICS')}
+          >
+            反馈与复盘
+          </button>
         }
       />
       <StatGrid
         items={[
-          { label: '已发布线路', value: String(active), detail: '当前可扫码反馈', tone: 'accent' },
-          { label: '线路草稿', value: String(drafts), detail: '不占用 3D 或岩点资产' },
+          { label: '正常线路', value: String(active), detail: 'Worker 当前可用', tone: 'accent' },
+          { label: '已停用线路', value: String(inactive), detail: '可恢复或删除' },
           { label: '二维码反馈', value: String(feedback), detail: '主动反馈样本，不等于真实客流' },
           {
             label: '墙段档案',
@@ -142,7 +130,7 @@ export function RouteOperationsPage() {
         ]}
       />
       {message && <p className="team-feedback is-error">{message}</p>}
-      {showForm && (
+      {showForm && editing && (
         <RouteEditor
           context={context}
           initial={editing}
@@ -154,44 +142,51 @@ export function RouteOperationsPage() {
           onWallCreated={refresh}
         />
       )}
-      {visualRoute && (
-        <RouteVisualWorkspace
-          initialRoute={visualRoute}
-          onClose={() => setVisualRoute(null)}
-          onConfirmed={refresh}
-        />
-      )}
       <SectionCard
         title="线路档案"
         description="颜色只用于识别；线路编号和发布版本才是数据归属依据。"
       >
+        <div className={styles.catalogTools}>
+          <input
+            value={routeQuery}
+            placeholder="搜索编号、名称、难度或颜色"
+            onChange={(event) => setRouteQuery(event.target.value)}
+          />
+          <select
+            value={statusFilter}
+            onChange={(event) =>
+              setStatusFilter(event.target.value as 'ALL' | 'PUBLISHED' | 'INACTIVE')
+            }
+          >
+            <option value="ALL">全部状态</option>
+            <option value="PUBLISHED">正常</option>
+            <option value="INACTIVE">已停用</option>
+          </select>
+        </div>
         {loading ? (
           <p className={styles.empty}>正在读取线路…</p>
-        ) : routes.length ? (
+        ) : visibleRoutes.length ? (
           <div className={styles.routeGrid}>
-            {routes.map((route) => (
+            {visibleRoutes.map((route) => (
               <RouteCard
                 key={route.id}
                 route={route}
                 onEdit={() => edit(route)}
                 onQr={() => setQrRoute(route)}
-                onVisual={() => setVisualRoute(route)}
                 onChanged={refresh}
                 onError={setMessage}
               />
             ))}
           </div>
+        ) : routes.length ? (
+          <div className={styles.emptyState}>
+            <strong>没有匹配的线路</strong>
+            <p>请调整搜索条件或状态筛选。</p>
+          </div>
         ) : (
           <div className={styles.emptyState}>
             <strong>还没有线路档案</strong>
-            <p>先建立墙段，再创建第一条真实线路；不需要 GLB、孔位或岩点库存。</p>
-            <button
-              className={styles.primaryButton}
-              type="button"
-              onClick={() => setShowForm(true)}
-            >
-              建立第一条线路
-            </button>
+            <p>请前往“视频识别”，根据真实墙面完成视觉标注并创建线路。</p>
           </div>
         )}
       </SectionCard>
@@ -204,32 +199,36 @@ function RouteCard({
   route,
   onEdit,
   onQr,
-  onVisual,
   onChanged,
   onError,
 }: {
   route: OperationalRoute;
   onEdit: () => void;
   onQr: () => void;
-  onVisual: () => void;
   onChanged: () => Promise<void>;
   onError: (message: string) => void;
 }) {
   const [working, setWorking] = useState(false);
 
-  async function action(kind: 'publish' | 'retire') {
+  async function action(kind: 'publish' | 'retire' | 'restore' | 'delete') {
     if (
       !window.confirm(
         kind === 'publish'
           ? '发布后将生成会员二维码，线路元数据将作为当前版本快照。确认发布？'
-          : '下线后二维码将停止接收反馈，历史数据仍会保留。确认下线？',
+          : kind === 'retire'
+            ? '停用后 Worker 和会员反馈将停止使用该线路，历史数据仍会保留。确认停用？'
+            : kind === 'restore'
+              ? '恢复后 Worker 将重新使用该线路。确认恢复？'
+              : '删除后该线路将从线路库和摄像头配置中隐藏，历史关联仍会保留。确认删除？',
       )
     )
       return;
     setWorking(true);
     try {
       if (kind === 'publish') await publishOperationalRoute(route.id);
-      else await retireOperationalRoute(route.id);
+      else if (kind === 'retire') await retireOperationalRoute(route.id);
+      else if (kind === 'restore') await restoreOperationalRoute(route.id);
+      else await deleteOperationalRoute(route.id);
       await onChanged();
     } catch (error) {
       onError(error instanceof Error ? error.message : '线路状态变更失败');
@@ -240,6 +239,7 @@ function RouteCard({
 
   return (
     <article className={styles.routeCard}>
+      {route.version?.hasPhoto && <RoutePhotoPreview route={route} />}
       <div className={styles.routeIdentity}>
         <span
           className={styles.routeColor}
@@ -283,19 +283,16 @@ function RouteCard({
       <p className={styles.routeDate}>
         {route.status === 'PUBLISHED'
           ? `上线于 ${formatDate(route.publishedAt)}`
-          : route.status === 'REMOVED'
-            ? `下线于 ${formatDate(route.retiredAt)}`
-            : `更新于 ${formatDate(route.updatedAt)}`}
+          : route.status === 'INACTIVE'
+            ? `停用于 ${formatDate(route.retiredAt)}`
+            : route.status === 'REMOVED'
+              ? `删除于 ${formatDate(route.retiredAt)}`
+              : `更新于 ${formatDate(route.updatedAt)}`}
       </p>
       <div className={styles.cardActions}>
-        {route.version && (
-          <button type="button" onClick={onVisual}>
-            {route.version.hasVisualAnnotation ? '查看线路视觉' : '标记线路位置'}
-          </button>
-        )}
         {route.actions.canEdit && (
           <button type="button" onClick={onEdit}>
-            编辑草稿
+            编辑信息
           </button>
         )}
         {route.actions.canPublish && (
@@ -315,11 +312,103 @@ function RouteCard({
             type="button"
             onClick={() => action('retire')}
           >
-            线路下线
+            停用线路
+          </button>
+        )}
+        {route.actions.canRestore && (
+          <button disabled={working} type="button" onClick={() => action('restore')}>
+            恢复线路
+          </button>
+        )}
+        {route.status === 'PUBLISHED' && (
+          <button
+            className={styles.dangerButton}
+            disabled
+            title="只有已停用的线路才能删除"
+            type="button"
+          >
+            删除线路
+          </button>
+        )}
+        {route.actions.canDelete && (
+          <button
+            className={styles.dangerButton}
+            disabled={working}
+            type="button"
+            onClick={() => action('delete')}
+          >
+            删除线路
           </button>
         )}
       </div>
     </article>
+  );
+}
+
+function RoutePhotoPreview({ route }: { route: OperationalRoute }) {
+  const [open, setOpen] = useState(false);
+  const photoUrl = routePhotoUrl(route.id);
+
+  useEffect(() => {
+    if (!open) return;
+    function closeOnEscape(event: KeyboardEvent) {
+      if (event.key === 'Escape') setOpen(false);
+    }
+    window.addEventListener('keydown', closeOnEscape);
+    return () => window.removeEventListener('keydown', closeOnEscape);
+  }, [open]);
+
+  return (
+    <>
+      <div className={styles.routePhotoFrame}>
+        <button
+          aria-haspopup="dialog"
+          aria-label={`查看 ${route.name} 的完整线路截图`}
+          className={styles.routePhotoButton}
+          type="button"
+          onClick={() => setOpen(true)}
+        >
+          {/* Authenticated same-origin image; the browser sends the session cookie. */}
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img className={styles.routePhoto} src={photoUrl} alt={`${route.name} 线路`} />
+          <span className={styles.routePhotoHint}>查看完整截图</span>
+        </button>
+      </div>
+      {open && (
+        <div
+          className={styles.dialogBackdrop}
+          role="presentation"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget) setOpen(false);
+          }}
+        >
+          <section
+            aria-label={`${route.name} 完整线路截图`}
+            aria-modal="true"
+            className={styles.photoDialog}
+            role="dialog"
+          >
+            <button
+              aria-label="关闭完整线路截图"
+              className={styles.dialogClose}
+              type="button"
+              onClick={() => setOpen(false)}
+            >
+              ×
+            </button>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              className={styles.routePhotoFull}
+              src={photoUrl}
+              alt={`${route.name} 完整线路截图`}
+            />
+            <p>
+              {route.code} · {route.name}
+            </p>
+          </section>
+        </div>
+      )}
+    </>
   );
 }
 
@@ -331,27 +420,23 @@ function RouteEditor({
   onWallCreated,
 }: {
   context: RouteContext;
-  initial: OperationalRoute | null;
+  initial: OperationalRoute;
   onCancel: () => void;
   onSaved: () => Promise<void>;
   onWallCreated: () => Promise<void>;
 }) {
-  const [form, setForm] = useState<RouteInput>(() =>
-    initial
-      ? {
-          code: initial.code,
-          name: initial.name,
-          description: initial.description ?? '',
-          color: initial.color,
-          grade: initial.grade,
-          gradeSystem: initial.gradeSystem ?? 'V',
-          styleTags: initial.styleTags,
-          setterMembershipId: initial.setter?.id ?? null,
-          wallSegmentIds: initial.wallSegments.map((wall) => wall.id),
-          expectedRetireAt: initial.expectedRetireAt,
-        }
-      : emptyForm,
-  );
+  const [form, setForm] = useState<RouteInput>(() => ({
+    code: initial.code,
+    name: initial.name,
+    description: initial.description ?? '',
+    color: initial.color,
+    grade: initial.grade,
+    gradeSystem: initial.gradeSystem ?? 'V',
+    styleTags: initial.styleTags,
+    setterMembershipId: initial.setter?.id ?? null,
+    wallSegmentIds: initial.wallSegments.map((wall) => wall.id),
+    expectedRetireAt: initial.expectedRetireAt,
+  }));
   const [tagText, setTagText] = useState(form.styleTags.join('，'));
   const [photo, setPhoto] = useState<File | null>(null);
   const [saving, setSaving] = useState(false);
@@ -375,9 +460,7 @@ function RouteEditor({
         : null,
     };
     try {
-      const route = initial
-        ? await updateOperationalRoute(initial.id, input)
-        : await createOperationalRoute(input);
+      const route = await updateOperationalRoute(initial.id, input);
       if (photo) await uploadRoutePhoto(route.id, photo);
       await onSaved();
     } catch (cause) {
@@ -393,8 +476,8 @@ function RouteEditor({
 
   return (
     <SectionCard
-      title={initial ? `编辑草稿 ${initial.code}` : '新建线路'}
-      description="第一阶段建档不要求三维模型和精确孔位。"
+      title={`编辑线路 ${initial.code}`}
+      description="线路编号由系统生成；修改颜色、难度或墙段时请确认视觉定义仍然有效。"
     >
       <form className={styles.editor} onSubmit={submit}>
         <div className={styles.formGrid}>
@@ -402,6 +485,7 @@ function RouteEditor({
             线路编号
             <input
               required
+              disabled
               maxLength={64}
               value={form.code}
               placeholder="例如 R-027"
@@ -550,7 +634,7 @@ function RouteEditor({
             disabled={saving || form.wallSegmentIds.length === 0}
             type="submit"
           >
-            {saving ? '保存中…' : '保存线路草稿'}
+            {saving ? '保存中…' : '保存线路信息'}
           </button>
         </div>
       </form>
@@ -679,9 +763,9 @@ function statusLabel(status: OperationalRoute['status']) {
     {
       DRAFT: '草稿',
       READY_FOR_INSTALL: '待施工',
-      PUBLISHED: '已发布',
+      PUBLISHED: '正常',
       INACTIVE: '已停用',
-      REMOVED: '已下线',
+      REMOVED: '已删除',
     } as const
   )[status];
 }

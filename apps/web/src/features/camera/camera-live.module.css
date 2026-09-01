@@ -1,0 +1,383 @@
+.page {
+  display: grid;
+  gap: 18px;
+}
+
+.hero {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  padding: 24px 28px;
+  border-radius: 18px;
+  color: #f5f9f6;
+  background:
+    radial-gradient(circle at 80% 10%, rgb(220 245 109 / 18%), transparent 30%),
+    linear-gradient(135deg, #173f35, #102f29);
+  box-shadow: var(--dashboard-shadow);
+}
+
+.hero p,
+.hero h2,
+.hero span {
+  margin: 0;
+}
+
+.hero p {
+  color: #a9beb5;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.16em;
+}
+
+.hero h2 {
+  margin-top: 7px;
+  font-size: clamp(24px, 3vw, 36px);
+  letter-spacing: -0.03em;
+}
+
+.hero > div:first-child > span {
+  display: block;
+  margin-top: 8px;
+  color: #bcd0c7;
+  font-size: 13px;
+}
+
+.heroActions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.status,
+.heroActions button {
+  min-height: 40px;
+  border-radius: 999px;
+}
+
+.status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 15px;
+  color: #eef5f1;
+  background: rgb(255 255 255 / 10%);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.status i {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #d7b98b;
+  box-shadow: 0 0 0 4px rgb(215 185 139 / 12%);
+}
+
+.status[data-state='online'] i {
+  background: #dcf56d;
+  box-shadow: 0 0 0 4px rgb(220 245 109 / 12%);
+}
+
+.status[data-state='offline'] i {
+  background: #f08576;
+}
+
+.heroActions button {
+  padding: 0 17px;
+  border: 1px solid rgb(255 255 255 / 18%);
+  color: #fff;
+  background: transparent;
+  cursor: pointer;
+  font-weight: 700;
+}
+
+.workspace {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 294px;
+  gap: 18px;
+  align-items: start;
+}
+
+.playerCard,
+.inspector,
+.message,
+.observations {
+  border: 1px solid var(--dashboard-line);
+  border-radius: 18px;
+  background: var(--dashboard-panel);
+  box-shadow: var(--dashboard-shadow);
+}
+
+.observations {
+  overflow: hidden;
+}
+
+.observations > header {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 24px;
+  padding: 20px 24px;
+  border-bottom: 1px solid var(--dashboard-line);
+}
+
+.observations header small,
+.observations header h3,
+.observations header p {
+  margin: 0;
+}
+
+.observations header small {
+  color: var(--dashboard-green);
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: 0.16em;
+}
+
+.observations header h3 {
+  margin-top: 5px;
+  font-size: 17px;
+}
+
+.observations header p {
+  color: var(--dashboard-muted);
+  font-size: 12px;
+}
+
+.observationTableWrap {
+  overflow-x: auto;
+}
+
+.observations table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.observations th,
+.observations td {
+  padding: 14px 24px;
+  border-bottom: 1px solid var(--dashboard-line);
+  text-align: left;
+  white-space: nowrap;
+}
+
+.observations th {
+  color: var(--dashboard-muted);
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.observations td {
+  font-size: 12px;
+}
+
+.observations td strong,
+.observations td small {
+  display: block;
+}
+
+.observations td small {
+  margin-top: 2px;
+  color: var(--dashboard-muted);
+}
+
+.outcome {
+  display: inline-flex;
+  padding: 5px 9px;
+  border-radius: 999px;
+  color: #7c5525;
+  background: #f5eee1;
+  font-weight: 800;
+}
+
+.outcome[data-outcome='completed'] {
+  color: #1c5a42;
+  background: #e7f0e9;
+}
+
+.observationEmpty {
+  display: grid;
+  justify-items: center;
+  padding: 42px 24px;
+  text-align: center;
+}
+
+.observationEmpty p {
+  margin: 7px 0 0;
+  color: var(--dashboard-muted);
+  font-size: 12px;
+}
+
+.playerCard {
+  overflow: hidden;
+}
+
+.playerFrame {
+  position: relative;
+  aspect-ratio: 16 / 9;
+  min-height: 360px;
+  background: #0b1110;
+}
+
+.playerFrame iframe {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  border: 0;
+  background: #0b1110;
+}
+
+.playerFooter {
+  display: flex;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 15px 18px;
+  color: var(--dashboard-muted);
+  font-size: 12px;
+}
+
+.playerFooter a {
+  color: var(--dashboard-green);
+  font-weight: 800;
+  text-decoration: none;
+}
+
+.inspector {
+  display: grid;
+  overflow: hidden;
+}
+
+.inspector section {
+  padding: 20px;
+}
+
+.inspector section + section {
+  border-top: 1px solid var(--dashboard-line);
+}
+
+.inspector small {
+  display: block;
+  margin-bottom: 7px;
+  color: var(--dashboard-muted);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.inspector strong {
+  display: block;
+  overflow-wrap: anywhere;
+  font-size: 14px;
+}
+
+.inspector p {
+  margin: 8px 0 0;
+  color: var(--dashboard-muted);
+  font-size: 12px;
+  line-height: 1.65;
+}
+
+.inspector dl {
+  display: grid;
+  gap: 8px;
+  margin: 18px 0 0;
+}
+
+.inspector dl div {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.inspector dt,
+.inspector dd {
+  margin: 0;
+  font-size: 12px;
+}
+
+.inspector dt {
+  color: var(--dashboard-muted);
+}
+
+.inspector dd {
+  font-weight: 800;
+}
+
+.notice {
+  background: #f5eee1;
+}
+
+.message {
+  min-height: 360px;
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  padding: 40px;
+  text-align: center;
+}
+
+.message span {
+  color: var(--dashboard-green);
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: 0.2em;
+}
+
+.message h2 {
+  margin: 10px 0 0;
+}
+
+.message p {
+  max-width: 520px;
+  margin: 10px 0 0;
+  color: var(--dashboard-muted);
+}
+
+@media (max-width: 980px) {
+  .workspace {
+    grid-template-columns: 1fr;
+  }
+
+  .inspector {
+    grid-template-columns: repeat(3, 1fr);
+  }
+
+  .inspector section + section {
+    border-top: 0;
+    border-left: 1px solid var(--dashboard-line);
+  }
+}
+
+@media (max-width: 720px) {
+  .hero,
+  .heroActions,
+  .playerFooter {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .heroActions button {
+    width: 100%;
+  }
+
+  .inspector {
+    grid-template-columns: 1fr;
+  }
+
+  .inspector section + section {
+    border-top: 1px solid var(--dashboard-line);
+    border-left: 0;
+  }
+
+  .playerFrame {
+    min-height: 220px;
+  }
+
+  .observations > header {
+    align-items: start;
+    flex-direction: column;
+  }
+}

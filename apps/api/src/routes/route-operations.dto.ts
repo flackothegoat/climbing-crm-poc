@@ -3,7 +3,6 @@ import {
   RouteDifficultyVote,
   RouteEnjoymentVote,
   RouteFeedbackOutcome,
-  RoutePlacementRole,
   RouteStatus,
 } from '@prisma/client';
 import { z } from 'zod';
@@ -41,7 +40,7 @@ const routeFields = {
   expectedRetireAt: optionalDateTime,
 };
 
-const createRouteSchema = z.object(routeFields);
+const createRouteSchema = z.object({ ...routeFields, code: code.optional() });
 const updateRouteSchema = z
   .object(routeFields)
   .partial()
@@ -82,42 +81,12 @@ const analyticsQuerySchema = z
   })
   .refine((value) => !value.from || !value.to || value.from < value.to, '开始时间必须早于结束时间');
 
-const visualPointSchema = z.object({
-  wallSegmentId: id,
-  role: z.nativeEnum(RoutePlacementRole),
-  uNormalized: z.number().finite().min(0).max(1),
-  vNormalized: z.number().finite().min(0).max(1),
-});
-
-const saveVisualAnnotationSchema = z
-  .object({ points: z.array(visualPointSchema).min(2).max(64) })
-  .superRefine(({ points }, context) => {
-    if (points[0]?.role !== RoutePlacementRole.START) {
-      context.addIssue({
-        code: 'custom',
-        path: ['points', 0, 'role'],
-        message: '第一个点必须是起点',
-      });
-    }
-    if (points.at(-1)?.role !== RoutePlacementRole.FINISH) {
-      context.addIssue({
-        code: 'custom',
-        path: ['points', points.length - 1, 'role'],
-        message: '最后一个点必须是终点',
-      });
-    }
-    if (points.slice(1, -1).some((point) => point.role !== RoutePlacementRole.NORMAL)) {
-      context.addIssue({ code: 'custom', path: ['points'], message: '中间点必须是普通岩点' });
-    }
-  });
-
 export type CreateRouteInput = z.infer<typeof createRouteSchema>;
 export type UpdateRouteInput = z.infer<typeof updateRouteSchema>;
 export type ListRoutesInput = z.infer<typeof listRoutesSchema>;
 export type CreateWallInput = z.infer<typeof createWallSchema>;
 export type SubmitFeedbackInput = z.infer<typeof submitFeedbackSchema>;
 export type AnalyticsQueryInput = z.infer<typeof analyticsQuerySchema>;
-export type SaveVisualAnnotationInput = z.infer<typeof saveVisualAnnotationSchema>;
 
 const parse = parseWithSchema;
 export const parseCreateRoute = (input: unknown) => parse(createRouteSchema, input);
@@ -128,5 +97,3 @@ export const parseRouteId = (input: unknown) => parse(id, input);
 export const parsePublicRouteToken = (input: unknown) => parse(publicTokenSchema, input);
 export const parseSubmitFeedback = (input: unknown) => parse(submitFeedbackSchema, input);
 export const parseAnalyticsQuery = (input: unknown) => parse(analyticsQuerySchema, input);
-export const parseSaveVisualAnnotation = (input: unknown) =>
-  parse(saveVisualAnnotationSchema, input);

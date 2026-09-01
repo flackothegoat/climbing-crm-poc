@@ -2,11 +2,11 @@ import {
   BadRequestException,
   Body,
   Controller,
+  Delete,
   Get,
   Param,
   Patch,
   Post,
-  Put,
   Query,
   Req,
   StreamableFile,
@@ -24,14 +24,12 @@ import {
   parseListRoutes,
   parsePublicRouteToken,
   parseRouteId,
-  parseSaveVisualAnnotation,
   parseSubmitFeedback,
   parseUpdateRoute,
 } from './route-operations.dto';
 import { RouteOperationsService } from './route-operations.service';
 import { RoutePhotoService } from './route-photo.service';
 import { PublicRouteService } from './public-route.service';
-import { RouteVisualService } from './route-visual.service';
 
 @ApiTags('route-operations')
 @ApiCookieAuth()
@@ -41,7 +39,6 @@ export class RouteOperationsController {
   constructor(
     private readonly routes: RouteOperationsService,
     private readonly photos: RoutePhotoService,
-    private readonly visuals: RouteVisualService,
   ) {}
 
   @Get('context')
@@ -80,31 +77,6 @@ export class RouteOperationsController {
     return this.routes.get(session, parseRouteId(routeId));
   }
 
-  @Get(':routeId/visual-annotation')
-  @ApiOperation({ summary: '读取线路当前版本的视觉标注草稿和已确认版本' })
-  getVisual(@CurrentSessionContext() session: CurrentSession, @Param('routeId') routeId: unknown) {
-    return this.visuals.get(session, parseRouteId(routeId));
-  }
-
-  @Put(':routeId/visual-annotation')
-  @ApiOperation({ summary: '保存墙段局部归一化坐标的线路视觉标注草稿' })
-  saveVisual(
-    @CurrentSessionContext() session: CurrentSession,
-    @Param('routeId') routeId: unknown,
-    @Body() body: unknown,
-  ) {
-    return this.visuals.saveDraft(session, parseRouteId(routeId), parseSaveVisualAnnotation(body));
-  }
-
-  @Post(':routeId/visual-annotation/confirm')
-  @ApiOperation({ summary: '确认视觉标注并替换该线路版本的当前展示版本' })
-  confirmVisual(
-    @CurrentSessionContext() session: CurrentSession,
-    @Param('routeId') routeId: unknown,
-  ) {
-    return this.visuals.confirm(session, parseRouteId(routeId));
-  }
-
   @Patch(':routeId')
   @ApiOperation({ summary: '修改未发布的线路草稿' })
   update(
@@ -115,6 +87,12 @@ export class RouteOperationsController {
     return this.routes.update(session, parseRouteId(routeId), parseUpdateRoute(body));
   }
 
+  @Delete(':routeId')
+  @ApiOperation({ summary: '删除已停用线路并保留历史关联' })
+  remove(@CurrentSessionContext() session: CurrentSession, @Param('routeId') routeId: unknown) {
+    return this.routes.remove(session, parseRouteId(routeId));
+  }
+
   @Post(':routeId/publish')
   @ApiOperation({ summary: '发布线路并生成可重复打印的签名二维码 token' })
   publish(@CurrentSessionContext() session: CurrentSession, @Param('routeId') routeId: unknown) {
@@ -122,9 +100,15 @@ export class RouteOperationsController {
   }
 
   @Post(':routeId/retire')
-  @ApiOperation({ summary: '下线线路、撤销二维码并保留历史反馈' })
+  @ApiOperation({ summary: '停用线路并保留版本、二维码和历史反馈' })
   retire(@CurrentSessionContext() session: CurrentSession, @Param('routeId') routeId: unknown) {
     return this.routes.retire(session, parseRouteId(routeId));
+  }
+
+  @Post(':routeId/restore')
+  @ApiOperation({ summary: '恢复已停用线路' })
+  restore(@CurrentSessionContext() session: CurrentSession, @Param('routeId') routeId: unknown) {
+    return this.routes.restore(session, parseRouteId(routeId));
   }
 
   @Post(':routeId/photo')

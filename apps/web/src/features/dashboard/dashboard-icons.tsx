@@ -7,6 +7,7 @@ export type IconName =
   | 'holds'
   | 'walls'
   | 'routes'
+  | 'camera'
   | 'calendar'
   | 'marketing'
   | 'data'
@@ -31,6 +32,7 @@ const ICON_PATHS: Record<IconName, string[]> = {
   holds: ['M8 3h8l3 5-3 6H8l-3-4 3-7Z', 'M9 18h6'],
   walls: ['M4 21V5l16-2v18', 'M4 9h16', 'M8 13h2', 'M14 16h2'],
   routes: ['M6 19c5-1 2-7 7-8s2-5 5-7', 'M5 19h2v2H5z', 'M17 3h2v2h-2z'],
+  camera: ['M15 10l4.55-2.28A1 1 0 0 1 21 8.62v6.76a1 1 0 0 1-1.45.9L15 14', 'M3 6h12v12H3z'],
   calendar: ['M3 5h18v16H3z', 'M16 3v4', 'M8 3v4', 'M3 10h18'],
   marketing: ['M3 11v2', 'M6 9v6l11 4V5L6 9Z', 'M8 15l2 6'],
   data: ['M4 19V9', 'M10 19V5', 'M16 19v-7', 'M22 19H2'],

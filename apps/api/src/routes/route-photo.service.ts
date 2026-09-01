@@ -33,10 +33,14 @@ export class RoutePhotoService {
   async upload(session: CurrentSession, routeId: string, file: MultipartFile) {
     this.access.assert(session, Capability.ASSET_DRAFT_WRITE);
     const route = await this.prisma.route.findFirst({
-      where: { id: routeId, organizationId: session.organization.id, status: RouteStatus.DRAFT },
+      where: {
+        id: routeId,
+        organizationId: session.organization.id,
+        status: { in: [RouteStatus.DRAFT, RouteStatus.PUBLISHED, RouteStatus.INACTIVE] },
+      },
       include: {
         versions: {
-          where: { status: RouteVersionStatus.DRAFT },
+          where: { status: { in: [RouteVersionStatus.DRAFT, RouteVersionStatus.PUBLISHED] } },
           orderBy: { versionNumber: 'desc' },
           take: 1,
           include: { photo: true, _count: { select: { placements: true } } },
@@ -44,7 +48,7 @@ export class RoutePhotoService {
       },
     });
     const version = route?.versions[0];
-    if (!route || !version) throw new NotFoundException('可上传照片的线路草稿不存在');
+    if (!route || !version) throw new NotFoundException('可上传照片的线路不存在');
     if (version._count.placements > 0) {
       throw new ConflictException('历史三维定线草稿已停止维护，请新建线路档案');
     }

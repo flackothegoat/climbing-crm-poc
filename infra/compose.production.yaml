@@ -51,6 +51,16 @@ services:
       MINIO_SECRET_KEY: ${MINIO_ROOT_PASSWORD}
       MINIO_BUCKET: ${MINIO_BUCKET}
       HOLD_MODEL_PROCESSING_ENABLED: ${HOLD_MODEL_PROCESSING_ENABLED:-true}
+      CAMERA_LIVE_ENABLED: ${CAMERA_LIVE_ENABLED:-true}
+      CAMERA_LIVE_NAME: ${CAMERA_LIVE_NAME:-攀岩墙主摄像头}
+      CAMERA_PLAYER_URL: ${CAMERA_PLAYER_URL}
+      CAMERA_RESOURCE_URL: ${CAMERA_RESOURCE_URL}
+      CAMERA_PROBE_URL: ${CAMERA_PROBE_URL}
+      CAMERA_PROBE_TIMEOUT_MS: ${CAMERA_PROBE_TIMEOUT_MS:-4000}
+      CAMERA_PROBE_CACHE_MS: ${CAMERA_PROBE_CACHE_MS:-10000}
+      CAMERA_SNAPSHOT_TIMEOUT_MS: ${CAMERA_SNAPSHOT_TIMEOUT_MS:-20000}
+      CAMERA_SNAPSHOT_CACHE_MS: ${CAMERA_SNAPSHOT_CACHE_MS:-5000}
+      CAMERA_SNAPSHOT_STALE_MS: ${CAMERA_SNAPSHOT_STALE_MS:-300000}
     depends_on:
       postgres:
         condition: service_healthy
@@ -60,7 +70,7 @@ services:
       test:
         [
           'CMD-SHELL',
-          'node -e "fetch(''http://127.0.0.1:3101/api/docs-json'').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"',
+          'node -e "fetch(''http://127.0.0.1:3101/api/health'').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"',
         ]
       interval: 10s
       timeout: 5s

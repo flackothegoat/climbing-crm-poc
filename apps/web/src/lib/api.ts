@@ -20,8 +20,12 @@ const inFlightGetRequests = new Map<string, Promise<unknown>>();
 let requestCacheGeneration = 0;
 
 export async function apiRequestBlob(path: string): Promise<Blob> {
+  return (await apiRequestBlobResponse(path)).blob();
+}
+
+export async function apiRequestBlobResponse(path: string): Promise<Response> {
   const response = await fetch(`${apiBaseUrl}${path}`, { credentials: 'include' });
-  if (response.ok) return response.blob();
+  if (response.ok) return response;
   throw new Error(await getErrorMessage(response, path));
 }
 

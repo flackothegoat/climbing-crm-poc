@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { apiBaseUrl, apiRequest, clearApiRequestCache } from './api';
+import { apiBaseUrl, apiRequest, apiRequestBlobResponse, clearApiRequestCache } from './api';
 
 afterEach(() => {
   clearApiRequestCache();
@@ -44,6 +44,22 @@ describe('apiRequest', () => {
     await expect(apiRequest('/holds/summary')).rejects.toThrow(
       '库存查询失败（500 /holds/summary · trace-123）',
     );
+  });
+
+  it('二进制请求保留服务端元数据响应头', async () => {
+    const response = new Response(new Blob(['jpeg']), {
+      headers: {
+        'content-type': 'image/jpeg',
+        'x-camera-snapshot-stale': 'true',
+      },
+      status: 200,
+    });
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(response));
+
+    const result = await apiRequestBlobResponse('/camera/snapshot');
+
+    expect(result.headers.get('x-camera-snapshot-stale')).toBe('true');
+    await expect(result.blob()).resolves.toBeInstanceOf(Blob);
   });
 
   it('合并同时发生的相同 GET 请求', async () => {

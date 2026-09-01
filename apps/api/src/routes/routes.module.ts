@@ -4,11 +4,10 @@ import { PublicRouteService } from './public-route.service';
 import { PublicRouteController, RouteOperationsController } from './route-operations.controller';
 import { RouteOperationsService } from './route-operations.service';
 import { RoutePhotoService } from './route-photo.service';
-import { RouteVisualService } from './route-visual.service';
 
 @Module({
   imports: [AuthModule],
   controllers: [RouteOperationsController, PublicRouteController],
-  providers: [RouteOperationsService, PublicRouteService, RoutePhotoService, RouteVisualService],
+  providers: [RouteOperationsService, PublicRouteService, RoutePhotoService],
 })
 export class RoutesModule {}

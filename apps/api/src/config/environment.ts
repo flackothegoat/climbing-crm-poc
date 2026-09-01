@@ -2,6 +2,13 @@ import { z } from 'zod';
 
 const booleanString = z.enum(['true', 'false']).transform((value) => value === 'true');
 
+const defaultCameraPlayerUrl =
+  'https://galsync-climbing-demo-01.southeastasia.cloudapp.azure.com/wvp/#/play/share?type=2&url=wss%3A%2F%2Fgalsync-climbing-demo-01.southeastasia.cloudapp.azure.com%2Fwvp-media%2Frtp%2F34020000001320000001_34020000001320000001.live.flv%3ForiginTypeStr%3Drtp_push%26videoCodec%3DH264';
+const defaultCameraResourceUrl =
+  'wss://galsync-climbing-demo-01.southeastasia.cloudapp.azure.com/wvp-media/rtp/34020000001320000001_34020000001320000001.live.flv?originTypeStr=rtp_push&videoCodec=H264';
+const defaultCameraProbeUrl =
+  'https://galsync-climbing-demo-01.southeastasia.cloudapp.azure.com/wvp-media/rtp/34020000001320000001_34020000001320000001.live.flv?originTypeStr=rtp_push&videoCodec=H264';
+
 const environmentSchema = z
   .object({
     NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
@@ -32,6 +39,23 @@ const environmentSchema = z
     SWAGGER_ENABLED: booleanString.optional(),
     OBJECT_STORAGE_REQUIRED: booleanString.default(false),
     REQUEST_LOG_ENABLED: booleanString.default(true),
+    CAMERA_LIVE_ENABLED: booleanString.default(true),
+    CAMERA_LIVE_NAME: z.string().trim().min(1).max(80).default('攀岩墙主摄像头'),
+    CAMERA_PLAYER_URL: z.string().url().default(defaultCameraPlayerUrl),
+    CAMERA_RESOURCE_URL: z.string().url().default(defaultCameraResourceUrl),
+    CAMERA_PROBE_URL: z.string().url().default(defaultCameraProbeUrl),
+    CAMERA_PROBE_TIMEOUT_MS: z.coerce.number().int().min(500).max(15000).default(4000),
+    CAMERA_PROBE_CACHE_MS: z.coerce.number().int().min(0).max(60000).default(10000),
+    CAMERA_SNAPSHOT_TIMEOUT_MS: z.coerce.number().int().min(5000).max(60000).default(20000),
+    CAMERA_SNAPSHOT_CACHE_MS: z.coerce.number().int().min(0).max(60000).default(5000),
+    CAMERA_SNAPSHOT_STALE_MS: z.coerce
+      .number()
+      .int()
+      .min(0)
+      .max(30 * 60 * 1000)
+      .default(5 * 60 * 1000),
+    CAMERA_WORKER_TOKEN: z.string().min(32).optional(),
+    CAMERA_WORKER_ORGANIZATION_ID: z.string().trim().min(1).max(128).optional(),
   })
   .superRefine((environment, context) => {
     if (environment.NODE_ENV === 'production' && !environment.SESSION_COOKIE_SECURE) {

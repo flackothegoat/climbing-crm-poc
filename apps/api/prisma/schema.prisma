@@ -412,6 +412,8 @@ model Account {
   createdRoutePhotos               RoutePhoto[]                @relation("RoutePhotoCreator")
   createdRouteVisualAnnotations    RouteVisualAnnotation[]     @relation("RouteVisualAnnotationCreator")
   confirmedRouteVisualAnnotations  RouteVisualAnnotation[]     @relation("RouteVisualAnnotationConfirmer")
+  createdCameraRouteDefinitions    CameraRouteDefinition[]     @relation("CameraRouteDefinitionCreator")
+  updatedCameraRouteDefinitions    CameraRouteDefinition[]     @relation("CameraRouteDefinitionUpdater")
   createdClimbObservations         ClimbObservation[]          @relation("ClimbObservationCreator")
   createdWallGeometryVersions      WallGeometryVersion[]       @relation("WallGeometryVersionCreator")
   createdWallAssets                WallAsset[]                 @relation("WallAssetCreator")
@@ -464,6 +466,7 @@ model Organization {
   routePhotos                 RoutePhoto[]
   routeVisualAnnotations      RouteVisualAnnotation[]
   routeVisualPoints           RouteVisualPoint[]
+  cameraRouteDefinitions      CameraRouteDefinition[]
   holdInstallationAnchors     HoldInstallationAnchor[]
   facilities                  Facility[]
   ownedHoldUnits              HoldUnit[]                      @relation("HoldUnitOwner")
@@ -1016,27 +1019,28 @@ model WallArea {
 }
 
 model WallSegment {
-  id                   String                    @id @default(cuid())
-  organizationId       String
-  areaId               String
-  code                 String
-  name                 String
-  routePlanRevision    Int                       @default(0)
-  status               WallStatus                @default(ACTIVE)
-  metadata             Json?
-  organization         Organization              @relation(fields: [organizationId], references: [id], onDelete: Restrict)
-  area                 WallArea                  @relation(fields: [areaId], references: [id], onDelete: Restrict)
-  holes                WallHole[]
-  climbObservations    ClimbObservation[]
-  geometryVersions     WallGeometryVersion[]
-  captureSegments      WallCaptureSegment[]
-  routeVersionSegments RouteVersionWallSegment[]
-  routeVisualPoints    RouteVisualPoint[]
-  settingJobSegments   WallSettingJobSegment[]
-  adjacenciesAsA       WallSegmentAdjacency[]    @relation("WallSegmentAdjacencyA")
-  adjacenciesAsB       WallSegmentAdjacency[]    @relation("WallSegmentAdjacencyB")
-  createdAt            DateTime                  @default(now())
-  updatedAt            DateTime                  @updatedAt
+  id                     String                    @id @default(cuid())
+  organizationId         String
+  areaId                 String
+  code                   String
+  name                   String
+  routePlanRevision      Int                       @default(0)
+  status                 WallStatus                @default(ACTIVE)
+  metadata               Json?
+  organization           Organization              @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  area                   WallArea                  @relation(fields: [areaId], references: [id], onDelete: Restrict)
+  holes                  WallHole[]
+  climbObservations      ClimbObservation[]
+  geometryVersions       WallGeometryVersion[]
+  captureSegments        WallCaptureSegment[]
+  routeVersionSegments   RouteVersionWallSegment[]
+  routeVisualPoints      RouteVisualPoint[]
+  cameraRouteDefinitions CameraRouteDefinition[]
+  settingJobSegments     WallSettingJobSegment[]
+  adjacenciesAsA         WallSegmentAdjacency[]    @relation("WallSegmentAdjacencyA")
+  adjacenciesAsB         WallSegmentAdjacency[]    @relation("WallSegmentAdjacencyB")
+  createdAt              DateTime                  @default(now())
+  updatedAt              DateTime                  @updatedAt
 
   @@unique([organizationId, code])
   @@index([areaId, status])
@@ -1092,61 +1096,63 @@ model WallHole {
 }
 
 model Route {
-  id                String             @id @default(cuid())
-  organizationId    String
-  code              String
-  name              String
-  color             ClimbingColor
-  grade             String
-  status            RouteStatus        @default(DRAFT)
-  dataSource        RouteDataSource    @default(MANUAL)
-  description       String?
-  expectedRetireAt  DateTime?
-  publishedAt       DateTime?
-  retiredAt         DateTime?
-  organization      Organization       @relation(fields: [organizationId], references: [id], onDelete: Restrict)
-  versions          RouteVersion[]
-  climbObservations ClimbObservation[]
-  publicLinks       RoutePublicLink[]
-  feedback          RouteFeedback[]
-  createdAt         DateTime           @default(now())
-  updatedAt         DateTime           @updatedAt
+  id                     String                  @id @default(cuid())
+  organizationId         String
+  code                   String
+  name                   String
+  color                  ClimbingColor
+  grade                  String
+  status                 RouteStatus             @default(DRAFT)
+  dataSource             RouteDataSource         @default(MANUAL)
+  description            String?
+  expectedRetireAt       DateTime?
+  publishedAt            DateTime?
+  retiredAt              DateTime?
+  organization           Organization            @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  versions               RouteVersion[]
+  climbObservations      ClimbObservation[]
+  cameraRouteDefinitions CameraRouteDefinition[]
+  publicLinks            RoutePublicLink[]
+  feedback               RouteFeedback[]
+  createdAt              DateTime                @default(now())
+  updatedAt              DateTime                @updatedAt
 
   @@unique([organizationId, code])
   @@index([organizationId, status, updatedAt])
 }
 
 model RouteVersion {
-  id                 String                    @id @default(cuid())
-  organizationId     String
-  routeId            String
-  versionNumber      Int
-  status             RouteVersionStatus        @default(DRAFT)
-  dataSource         RouteDataSource           @default(MANUAL)
-  note               String?
-  color              ClimbingColor?
-  grade              String?
-  gradeSystem        String?
-  styleTags          String[]                  @default([])
-  setterMembershipId String?
-  publishedAt        DateTime?
-  retiredAt          DateTime?
-  createdByAccountId String
-  settingJobId       String?
-  organization       Organization              @relation(fields: [organizationId], references: [id], onDelete: Restrict)
-  route              Route                     @relation(fields: [routeId], references: [id], onDelete: Restrict)
-  createdBy          Account                   @relation("RouteVersionCreator", fields: [createdByAccountId], references: [id], onDelete: Restrict)
-  setter             Membership?               @relation("RouteVersionSetter", fields: [setterMembershipId], references: [id], onDelete: Restrict)
-  settingJob         WallSettingJob?           @relation(fields: [settingJobId], references: [id], onDelete: Restrict)
-  placements         RouteHoldPlacement[]
-  climbObservations  ClimbObservation[]
-  wallSegments       RouteVersionWallSegment[]
-  installations      HoldInstallation[]
-  feedback           RouteFeedback[]
-  photo              RoutePhoto?
-  visualAnnotations  RouteVisualAnnotation[]
-  createdAt          DateTime                  @default(now())
-  updatedAt          DateTime                  @updatedAt
+  id                     String                    @id @default(cuid())
+  organizationId         String
+  routeId                String
+  versionNumber          Int
+  status                 RouteVersionStatus        @default(DRAFT)
+  dataSource             RouteDataSource           @default(MANUAL)
+  note                   String?
+  color                  ClimbingColor?
+  grade                  String?
+  gradeSystem            String?
+  styleTags              String[]                  @default([])
+  setterMembershipId     String?
+  publishedAt            DateTime?
+  retiredAt              DateTime?
+  createdByAccountId     String
+  settingJobId           String?
+  organization           Organization              @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  route                  Route                     @relation(fields: [routeId], references: [id], onDelete: Restrict)
+  createdBy              Account                   @relation("RouteVersionCreator", fields: [createdByAccountId], references: [id], onDelete: Restrict)
+  setter                 Membership?               @relation("RouteVersionSetter", fields: [setterMembershipId], references: [id], onDelete: Restrict)
+  settingJob             WallSettingJob?           @relation(fields: [settingJobId], references: [id], onDelete: Restrict)
+  placements             RouteHoldPlacement[]
+  climbObservations      ClimbObservation[]
+  wallSegments           RouteVersionWallSegment[]
+  installations          HoldInstallation[]
+  feedback               RouteFeedback[]
+  photo                  RoutePhoto?
+  visualAnnotations      RouteVisualAnnotation[]
+  cameraRouteDefinitions CameraRouteDefinition[]
+  createdAt              DateTime                  @default(now())
+  updatedAt              DateTime                  @updatedAt
 
   @@unique([routeId, versionNumber])
   @@index([organizationId, status, updatedAt])
@@ -1315,6 +1321,41 @@ model ClimbObservation {
   @@index([organizationId, observedAt])
   @@index([wallSegmentId, observedAt])
   @@index([routeId, observedAt])
+}
+
+model CameraRouteDefinition {
+  id                 String       @id @default(cuid())
+  organizationId     String
+  cameraKey          String
+  wallSegmentId      String
+  routeId            String
+  routeVersionId     String
+  revision           Int          @default(1)
+  roiX1              Float
+  roiY1              Float
+  roiX2              Float
+  roiY2              Float
+  referenceWidth     Int
+  referenceHeight    Int
+  holds              Json
+  startHoldIds       String[]     @default([])
+  finishHoldIds      String[]     @default([])
+  createdByAccountId String
+  updatedByAccountId String
+  organization       Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  wallSegment        WallSegment  @relation(fields: [wallSegmentId], references: [id], onDelete: Restrict)
+  route              Route        @relation(fields: [routeId], references: [id], onDelete: Restrict)
+  routeVersion       RouteVersion @relation(fields: [routeVersionId], references: [id], onDelete: Restrict)
+  createdBy          Account      @relation("CameraRouteDefinitionCreator", fields: [createdByAccountId], references: [id], onDelete: Restrict)
+  updatedBy          Account      @relation("CameraRouteDefinitionUpdater", fields: [updatedByAccountId], references: [id], onDelete: Restrict)
+  createdAt          DateTime     @default(now())
+  updatedAt          DateTime     @updatedAt
+
+  @@unique([organizationId, cameraKey, routeVersionId])
+  @@index([organizationId, cameraKey, updatedAt])
+  @@index([wallSegmentId])
+  @@index([routeId])
+  @@index([routeVersionId])
 }
 
 model WallGeometryVersion {

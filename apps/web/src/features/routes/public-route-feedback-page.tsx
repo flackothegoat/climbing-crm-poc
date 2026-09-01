@@ -13,7 +13,6 @@ import {
   type PublicRoute,
 } from './route-operations-api';
 import styles from './public-route.module.css';
-import { RouteVisualTopo } from './route-visual-topo';
 
 export function PublicRouteFeedbackPage({ token }: { token: string }) {
   const [route, setRoute] = useState<PublicRoute | null>(null);
@@ -58,21 +57,6 @@ export function PublicRouteFeedbackPage({ token }: { token: string }) {
             className={styles.routePhoto}
             alt={`${route.code} ${route.name} 线路照片`}
             src={publicRoutePhotoUrl(token)}
-          />
-        )}
-        {route.visualAnnotation && (
-          <RouteVisualTopo
-            color={climbingColorCss(route.color)}
-            compact
-            points={route.visualAnnotation.points.map((point) => ({
-              ...point,
-              wallSegmentId: point.wallSegmentCode ?? '',
-            }))}
-            segments={route.wallSegments.map((wall) => ({
-              id: wall.code,
-              code: wall.code,
-              name: wall.name,
-            }))}
           />
         )}
         <div className={styles.tags}>

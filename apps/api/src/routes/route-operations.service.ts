@@ -9,7 +9,6 @@ import {
   type ClimbingColor,
   RoutePublicLinkStatus,
   RouteStatus,
-  RouteVisualAnnotationStatus,
   RouteVersionStatus,
   WallStatus,
   type Prisma,
@@ -41,11 +40,6 @@ const routeInclude = {
         },
       },
       photo: { select: { id: true } },
-      visualAnnotations: {
-        where: { status: RouteVisualAnnotationStatus.CONFIRMED },
-        select: { id: true },
-        take: 1,
-      },
       _count: { select: { placements: true } },
     },
   },
@@ -155,7 +149,7 @@ export class RouteOperationsService {
     const routes = await this.prisma.route.findMany({
       where: {
         organizationId: session.organization.id,
-        status: input.status,
+        status: input.status ?? { in: [RouteStatus.PUBLISHED, RouteStatus.INACTIVE] },
         versions: input.wallSegmentId
           ? { some: { wallSegments: { some: { wallSegmentId: input.wallSegmentId } } } }
           : undefined,
@@ -176,10 +170,13 @@ export class RouteOperationsService {
     const routeId = await this.prisma.$transaction(async (transaction) => {
       await lockHoldOrganization(transaction, session.organization.id);
       await assertRouteContext(transaction, session.organization.id, input);
+      const routeCode =
+        input.code ??
+        (await generateRouteCode(transaction, session.organization.id, input.wallSegmentIds[0]!));
       const route = await transaction.route.create({
         data: {
           organizationId: session.organization.id,
-          code: input.code,
+          code: routeCode,
           name: input.name,
           color: input.color,
           grade: input.grade,
@@ -229,7 +226,7 @@ export class RouteOperationsService {
     this.access.assert(session, Capability.ASSET_DRAFT_WRITE);
     await this.prisma.$transaction(async (transaction) => {
       await lockHoldOrganization(transaction, session.organization.id);
-      const route = await findDraftRoute(transaction, session.organization.id, routeId);
+      const route = await findEditableRoute(transaction, session.organization.id, routeId);
       const version = route.versions[0];
       if (!version || version.settingJobId || version._count.placements > 0) {
         throw new ConflictException('历史三维定线草稿已停止维护，请新建线路档案');
@@ -242,10 +239,12 @@ export class RouteOperationsService {
         wallSegmentIds:
           input.wallSegmentIds ?? version.wallSegments.map((item) => item.wallSegmentId),
       });
+      if (input.code && input.code !== route.code) {
+        throw new ConflictException('线路编号由系统生成，创建后不能修改');
+      }
       await transaction.route.update({
         where: { id: route.id },
         data: {
-          code: input.code,
           name: input.name,
           color: input.color,
           grade: input.grade,
@@ -291,6 +290,60 @@ export class RouteOperationsService {
       );
     });
     return this.get(session, routeId);
+  }
+
+  async remove(session: CurrentSession, routeId: string) {
+    this.access.assert(session, Capability.ASSET_PUBLISH);
+    await this.prisma.$transaction(async (transaction) => {
+      await lockHoldOrganization(transaction, session.organization.id);
+      const route = await transaction.route.findFirst({
+        where: {
+          id: routeId,
+          organizationId: session.organization.id,
+          status: RouteStatus.INACTIVE,
+        },
+        include: {
+          versions: {
+            orderBy: { versionNumber: 'desc' },
+            take: 1,
+          },
+        },
+      });
+      const version = route?.versions[0];
+      if (!route || !version) throw new NotFoundException('只有已停用的线路才能删除');
+      const now = new Date();
+      await transaction.route.update({
+        where: { id: route.id },
+        data: { status: RouteStatus.REMOVED, retiredAt: now },
+      });
+      await transaction.routeVersion.updateMany({
+        where: {
+          organizationId: session.organization.id,
+          routeId: route.id,
+          status: { not: RouteVersionStatus.RETIRED },
+        },
+        data: { status: RouteVersionStatus.RETIRED, retiredAt: now },
+      });
+      await transaction.routePublicLink.updateMany({
+        where: {
+          organizationId: session.organization.id,
+          routeId,
+          status: RoutePublicLinkStatus.ACTIVE,
+        },
+        data: { status: RoutePublicLinkStatus.REVOKED, activeRouteKey: null, revokedAt: now },
+      });
+      await this.audit.record(
+        {
+          organizationId: session.organization.id,
+          actorAccountId: session.account.id,
+          type: 'route.removed',
+          outcome: 'SUCCESS',
+          metadata: { routeId: route.id, routeVersionId: version.id },
+        },
+        transaction,
+      );
+    });
+    return { id: routeId, status: RouteStatus.REMOVED };
   }
 
   async publish(session: CurrentSession, routeId: string) {
@@ -362,29 +415,57 @@ export class RouteOperationsService {
           },
         },
       });
-      if (!route?.versions[0]) throw new NotFoundException('可下线的已发布线路不存在');
+      if (!route?.versions[0]) throw new NotFoundException('可停用的正常线路不存在');
       const now = new Date();
       await transaction.route.update({
         where: { id: route.id },
-        data: { status: RouteStatus.REMOVED, retiredAt: now },
-      });
-      await transaction.routeVersion.update({
-        where: { id: route.versions[0].id },
-        data: { status: RouteVersionStatus.RETIRED, retiredAt: now },
-      });
-      await transaction.routePublicLink.updateMany({
-        where: {
-          organizationId: session.organization.id,
-          routeId,
-          status: RoutePublicLinkStatus.ACTIVE,
-        },
-        data: { status: RoutePublicLinkStatus.REVOKED, activeRouteKey: null, revokedAt: now },
+        data: { status: RouteStatus.INACTIVE, retiredAt: now },
       });
       await this.audit.record(
         {
           organizationId: session.organization.id,
           actorAccountId: session.account.id,
-          type: 'route.retired',
+          type: 'route.deactivated',
+          outcome: 'SUCCESS',
+          metadata: { routeId: route.id, routeVersionId: route.versions[0].id },
+        },
+        transaction,
+      );
+    });
+    return this.get(session, routeId);
+  }
+
+  async restore(session: CurrentSession, routeId: string) {
+    this.access.assert(session, Capability.ASSET_PUBLISH);
+    await this.prisma.$transaction(async (transaction) => {
+      await lockHoldOrganization(transaction, session.organization.id);
+      const route = await transaction.route.findFirst({
+        where: {
+          id: routeId,
+          organizationId: session.organization.id,
+          status: RouteStatus.INACTIVE,
+        },
+        include: {
+          versions: {
+            orderBy: { versionNumber: 'desc' },
+            take: 1,
+          },
+        },
+      });
+      if (!route?.versions[0]) throw new NotFoundException('可恢复的已停用线路不存在');
+      await transaction.route.update({
+        where: { id: route.id },
+        data: { status: RouteStatus.PUBLISHED, retiredAt: null },
+      });
+      await transaction.routeVersion.update({
+        where: { id: route.versions[0].id },
+        data: { status: RouteVersionStatus.PUBLISHED, retiredAt: null },
+      });
+      await this.audit.record(
+        {
+          organizationId: session.organization.id,
+          actorAccountId: session.account.id,
+          type: 'route.restored',
           outcome: 'SUCCESS',
           metadata: { routeId: route.id, routeVersionId: route.versions[0].id },
         },
@@ -399,7 +480,7 @@ export class RouteOperationsService {
     const routes = await this.prisma.route.findMany({
       where: {
         organizationId: session.organization.id,
-        status: { in: [RouteStatus.PUBLISHED, RouteStatus.REMOVED] },
+        status: { in: [RouteStatus.PUBLISHED, RouteStatus.INACTIVE, RouteStatus.REMOVED] },
         versions: input.wallSegmentId
           ? { some: { wallSegments: { some: { wallSegmentId: input.wallSegmentId } } } }
           : undefined,
@@ -467,7 +548,7 @@ export class RouteOperationsService {
   private mapRoute(route: RouteRecord) {
     const version =
       route.versions.find((candidate) =>
-        route.status === RouteStatus.PUBLISHED
+        route.status === RouteStatus.PUBLISHED || route.status === RouteStatus.INACTIVE
           ? candidate.status === RouteVersionStatus.PUBLISHED
           : route.status === RouteStatus.REMOVED
             ? candidate.status === RouteVersionStatus.RETIRED
@@ -498,7 +579,6 @@ export class RouteOperationsService {
             status: version.status,
             hasPhoto: Boolean(version.photo),
             has3dPlacements: version._count.placements > 0,
-            hasVisualAnnotation: (version.visualAnnotations?.length ?? 0) > 0,
           }
         : null,
       expectedRetireAt: route.expectedRetireAt?.toISOString() ?? null,
@@ -509,9 +589,14 @@ export class RouteOperationsService {
       publicToken: publicLink ? this.tokens.issuePublicRouteToken(publicLink.id) : null,
       updatedAt: route.updatedAt.toISOString(),
       actions: {
-        canEdit: route.status === RouteStatus.DRAFT && !version?.settingJobId,
+        canEdit:
+          (route.status === RouteStatus.PUBLISHED || route.status === RouteStatus.INACTIVE) &&
+          version?.status !== RouteVersionStatus.RETIRED &&
+          !version?.settingJobId,
         canPublish: route.status === RouteStatus.DRAFT && Boolean(version?.wallSegments.length),
         canRetire: route.status === RouteStatus.PUBLISHED,
+        canRestore: route.status === RouteStatus.INACTIVE,
+        canDelete: route.status === RouteStatus.INACTIVE,
       },
     };
   }
@@ -597,8 +682,60 @@ async function findDraftRoute(
   return route;
 }
 
+async function findEditableRoute(
+  transaction: Prisma.TransactionClient,
+  organizationId: string,
+  routeId: string,
+) {
+  const route = await transaction.route.findFirst({
+    where: {
+      id: routeId,
+      organizationId,
+      status: { in: [RouteStatus.DRAFT, RouteStatus.PUBLISHED, RouteStatus.INACTIVE] },
+    },
+    include: {
+      versions: {
+        where: { status: { in: [RouteVersionStatus.DRAFT, RouteVersionStatus.PUBLISHED] } },
+        orderBy: { versionNumber: 'desc' },
+        take: 1,
+        include: {
+          wallSegments: { orderBy: { ordinal: 'asc' } },
+          _count: { select: { placements: true } },
+        },
+      },
+    },
+  });
+  if (!route?.versions[0]) throw new NotFoundException('可编辑的线路不存在');
+  return route;
+}
+
 function toDate(value: string | null | undefined): Date | null | undefined {
   return value === undefined ? undefined : value ? new Date(value) : null;
+}
+
+async function generateRouteCode(
+  transaction: Prisma.TransactionClient,
+  organizationId: string,
+  wallSegmentId: string,
+) {
+  const wall = await transaction.wallSegment.findFirst({
+    where: { id: wallSegmentId, organizationId },
+    select: { code: true },
+  });
+  if (!wall) throw new BadRequestException('墙段不存在或不可用');
+  const now = new Date();
+  const date = `${String(now.getUTCFullYear()).slice(-2)}${String(now.getUTCMonth() + 1).padStart(2, '0')}${String(now.getUTCDate()).padStart(2, '0')}`;
+  const prefix = `${wall.code}-${date}-`;
+  const existing = await transaction.route.findMany({
+    where: { organizationId, code: { startsWith: prefix } },
+    select: { code: true },
+  });
+  const next =
+    existing.reduce((largest, route) => {
+      const suffix = Number(route.code.slice(prefix.length));
+      return Number.isInteger(suffix) ? Math.max(largest, suffix) : largest;
+    }, 0) + 1;
+  return `${prefix}${String(next).padStart(3, '0')}`;
 }
 
 function analyticsItem(

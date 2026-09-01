@@ -42,6 +42,25 @@
   padding: 20px;
 }
 
+.catalogTools {
+  display: grid;
+  grid-template-columns: minmax(220px, 1fr) 180px;
+  gap: 10px;
+  padding: 18px 20px 0;
+}
+
+.catalogTools input,
+.catalogTools select {
+  min-height: 40px;
+  padding: 0 12px;
+  border: 1px solid #dbe4de;
+  border-radius: 10px;
+  color: #29483d;
+  background: #fff;
+  font: inherit;
+  font-size: 13px;
+}
+
 .routeCard {
   display: grid;
   align-content: start;
@@ -50,6 +69,73 @@
   border: 1px solid #dde5e0;
   border-radius: 16px;
   background: #fbfcfa;
+}
+
+.routePhotoFrame {
+  position: relative;
+  min-width: 0;
+}
+
+.routePhotoButton {
+  position: relative;
+  width: 100%;
+  display: block;
+  overflow: visible;
+  padding: 0;
+  border: 0;
+  border-radius: 11px;
+  background: transparent;
+  cursor: zoom-in;
+}
+
+.routePhoto {
+  display: block;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  border-radius: 11px;
+  object-fit: cover;
+  background: #eef2ef;
+}
+
+.routePhotoHint {
+  position: absolute;
+  right: 9px;
+  bottom: 9px;
+  padding: 5px 8px;
+  border-radius: 99px;
+  color: #fff;
+  background: rgb(15 43 34 / 76%);
+  font-size: 10px;
+  font-weight: 750;
+  opacity: 1;
+}
+
+.photoDialog {
+  position: relative;
+  width: min(94vw, 1120px);
+  max-height: 92vh;
+  display: grid;
+  gap: 12px;
+  padding: 18px;
+  border-radius: 18px;
+  background: #fff;
+  box-shadow: 0 28px 90px rgb(10 40 30 / 28%);
+}
+
+.routePhotoFull {
+  width: 100%;
+  max-height: calc(92vh - 78px);
+  border-radius: 12px;
+  object-fit: contain;
+  background: #12201b;
+}
+
+.photoDialog p {
+  margin: 0;
+  color: #365248;
+  font-size: 13px;
+  font-weight: 750;
+  text-align: center;
 }
 
 .routeIdentity {
@@ -265,6 +351,10 @@
   color: #a44236;
   border-color: #edd2cd;
   background: #fff8f6;
+}
+
+.cardActions .dangerButton:disabled {
+  cursor: not-allowed;
 }
 
 .empty,
@@ -501,6 +591,10 @@
 }
 
 @media (max-width: 620px) {
+  .catalogTools {
+    grid-template-columns: 1fr;
+  }
+
   .headingActions,
   .formGrid,
   .wallCreator {

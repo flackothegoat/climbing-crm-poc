@@ -32,7 +32,6 @@ export interface OperationalRoute {
     status: 'DRAFT' | 'PUBLISHED' | 'RETIRED';
     hasPhoto: boolean;
     has3dPlacements: boolean;
-    hasVisualAnnotation: boolean;
   } | null;
   expectedRetireAt: string | null;
   publishedAt: string | null;
@@ -41,7 +40,13 @@ export interface OperationalRoute {
   observationCount: number;
   publicToken: string | null;
   updatedAt: string;
-  actions: { canEdit: boolean; canPublish: boolean; canRetire: boolean };
+  actions: {
+    canEdit: boolean;
+    canPublish: boolean;
+    canRetire: boolean;
+    canRestore: boolean;
+    canDelete: boolean;
+  };
 }
 
 export interface RouteContext {
@@ -67,6 +72,8 @@ export interface RouteInput {
   wallSegmentIds: string[];
   expectedRetireAt?: string | null;
 }
+
+export type CreateRouteInput = Omit<RouteInput, 'code'> & { code?: string };
 
 export interface RouteAnalyticsItem {
   routeId: string;
@@ -110,42 +117,7 @@ export interface PublicRoute {
   publishedAt: string | null;
   retiredAt: string | null;
   hasPhoto: boolean;
-  visualAnnotation: RouteVisualAnnotation | null;
   metricNotice: string;
-}
-
-export type RouteVisualPointRole = 'START' | 'NORMAL' | 'FINISH';
-
-export interface RouteVisualPoint {
-  id?: string;
-  wallSegmentId: string;
-  wallSegmentCode?: string;
-  ordinal?: number;
-  role: RouteVisualPointRole;
-  uNormalized: number;
-  vNormalized: number;
-}
-
-export interface RouteVisualAnnotation {
-  id?: string;
-  revision: number;
-  status?: 'DRAFT' | 'CONFIRMED' | 'RETIRED';
-  source?: 'MANUAL' | 'AI_SUGGESTED' | 'IMPORTED';
-  confirmedAt?: string | null;
-  updatedAt?: string;
-  points: RouteVisualPoint[];
-}
-
-export interface RouteVisualWorkspaceData {
-  route: Pick<OperationalRoute, 'id' | 'code' | 'name' | 'status' | 'color' | 'grade'>;
-  version: { id: string; number: number; status: 'DRAFT' | 'PUBLISHED' | 'RETIRED' };
-  wallSegments: Array<
-    RouteWallSegment & {
-      area: { code: string; name: string; floorLabel: string | null };
-    }
-  >;
-  draft: RouteVisualAnnotation | null;
-  confirmed: RouteVisualAnnotation | null;
 }
 
 export const getRouteContext = () => apiRequest<RouteContext>('/route-operations/context');
@@ -153,7 +125,7 @@ export const getOperationalRoutes = () =>
   apiRequest<{ items: OperationalRoute[] }>('/route-operations').then((page) => page.items);
 export const getRouteAnalytics = () => apiRequest<RouteAnalytics>('/route-operations/analytics');
 
-export const createOperationalRoute = (input: RouteInput) =>
+export const createOperationalRoute = (input: CreateRouteInput) =>
   apiRequest<OperationalRoute>('/route-operations', {
     method: 'POST',
     body: JSON.stringify(input),
@@ -175,21 +147,15 @@ export const retireOperationalRoute = (routeId: string) =>
     method: 'POST',
   });
 
-export const getRouteVisualWorkspace = (routeId: string) =>
-  apiRequest<RouteVisualWorkspaceData>(
-    `/route-operations/${encodeURIComponent(routeId)}/visual-annotation`,
-  );
+export const restoreOperationalRoute = (routeId: string) =>
+  apiRequest<OperationalRoute>(`/route-operations/${encodeURIComponent(routeId)}/restore`, {
+    method: 'POST',
+  });
 
-export const saveRouteVisualDraft = (routeId: string, points: RouteVisualPoint[]) =>
-  apiRequest<RouteVisualWorkspaceData>(
-    `/route-operations/${encodeURIComponent(routeId)}/visual-annotation`,
-    { method: 'PUT', body: JSON.stringify({ points }) },
-  );
-
-export const confirmRouteVisual = (routeId: string) =>
-  apiRequest<RouteVisualWorkspaceData>(
-    `/route-operations/${encodeURIComponent(routeId)}/visual-annotation/confirm`,
-    { method: 'POST' },
+export const deleteOperationalRoute = (routeId: string) =>
+  apiRequest<{ id: string; status: 'REMOVED' }>(
+    `/route-operations/${encodeURIComponent(routeId)}`,
+    { method: 'DELETE' },
   );
 
 export async function uploadRoutePhoto(routeId: string, file: File) {
@@ -200,6 +166,9 @@ export async function uploadRoutePhoto(routeId: string, file: File) {
     body: form,
   });
 }
+
+export const routePhotoUrl = (routeId: string) =>
+  `${apiBaseUrl}/route-operations/${encodeURIComponent(routeId)}/photo`;
 
 export const createOperationalWall = (input: {
   areaCode: string;

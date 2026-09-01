@@ -1,10 +1,6 @@
 import { ClimbingColor } from '@prisma/client';
 import { describe, expect, it } from 'vitest';
-import {
-  parseCreateRoute,
-  parseSaveVisualAnnotation,
-  parseSubmitFeedback,
-} from './route-operations.dto';
+import { parseCreateRoute, parseSubmitFeedback } from './route-operations.dto';
 
 describe('线路运营 DTO', () => {
   it('允许不包含三维孔位的跨墙段线路，并去重风格标签', () => {
@@ -40,6 +36,18 @@ describe('线路运营 DTO', () => {
     );
   });
 
+  it('视觉配置创建线路时允许省略由服务器生成的线路编号', () => {
+    expect(
+      parseCreateRoute({
+        name: '黄色测试线',
+        color: ClimbingColor.YELLOW,
+        grade: 'V4',
+        gradeSystem: 'V',
+        wallSegmentIds: ['wall-segment-0001'],
+      }).code,
+    ).toBeUndefined();
+  });
+
   it('拒绝二维码反馈携带过长文本', () => {
     expect(() =>
       parseSubmitFeedback({
@@ -49,46 +57,6 @@ describe('线路运营 DTO', () => {
         anonymousSessionId: 'anonymous-session-0001',
         requestKey: crypto.randomUUID(),
         comment: '过'.repeat(301),
-      }),
-    ).toThrow();
-  });
-
-  it('要求视觉标注严格按起点、普通点、终点排序且坐标归一化', () => {
-    expect(
-      parseSaveVisualAnnotation({
-        points: [
-          { wallSegmentId: 'wall-segment-0001', role: 'START', uNormalized: 0.2, vNormalized: 0.8 },
-          {
-            wallSegmentId: 'wall-segment-0001',
-            role: 'NORMAL',
-            uNormalized: 0.5,
-            vNormalized: 0.5,
-          },
-          {
-            wallSegmentId: 'wall-segment-0002',
-            role: 'FINISH',
-            uNormalized: 0.2,
-            vNormalized: 0.1,
-          },
-        ],
-      }).points,
-    ).toHaveLength(3);
-    expect(() =>
-      parseSaveVisualAnnotation({
-        points: [
-          {
-            wallSegmentId: 'wall-segment-0001',
-            role: 'START',
-            uNormalized: -0.1,
-            vNormalized: 0.8,
-          },
-          {
-            wallSegmentId: 'wall-segment-0001',
-            role: 'FINISH',
-            uNormalized: 0.5,
-            vNormalized: 0.1,
-          },
-        ],
       }),
     ).toThrow();
   });

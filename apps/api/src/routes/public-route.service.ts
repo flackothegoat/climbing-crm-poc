@@ -2,7 +2,6 @@ import { GoneException, Injectable, NotFoundException } from '@nestjs/common';
 import {
   RoutePublicLinkStatus,
   RouteStatus,
-  RouteVisualAnnotationStatus,
   RouteVersionStatus,
   type Prisma,
 } from '@prisma/client';
@@ -26,16 +25,6 @@ const publicLinkInclude = {
             include: { wallSegment: { select: { code: true, name: true } } },
           },
           photo: true,
-          visualAnnotations: {
-            where: { status: RouteVisualAnnotationStatus.CONFIRMED },
-            take: 1,
-            include: {
-              points: {
-                orderBy: { ordinal: 'asc' as const },
-                include: { wallSegment: { select: { code: true } } },
-              },
-            },
-          },
         },
       },
     },
@@ -77,17 +66,6 @@ export class PublicRouteService {
         version.publishedAt?.toISOString() ?? link.route.publishedAt?.toISOString() ?? null,
       retiredAt: version.retiredAt?.toISOString() ?? link.route.retiredAt?.toISOString() ?? null,
       hasPhoto: Boolean(version.photo),
-      visualAnnotation: version.visualAnnotations?.[0]
-        ? {
-            revision: version.visualAnnotations[0].revision,
-            points: version.visualAnnotations[0].points.map((point) => ({
-              wallSegmentCode: point.wallSegment.code,
-              role: point.role,
-              uNormalized: point.uNormalized,
-              vNormalized: point.vNormalized,
-            })),
-          }
-        : null,
       metricNotice: '本页反馈用于线路运营复盘，不会被解释为全馆全部尝试次数。',
     };
   }
