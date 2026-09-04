@@ -53,6 +53,40 @@ sudo docker compose --env-file "$env_file" -f "$compose_file" run --rm api \
 sudo docker compose --env-file "$env_file" -f "$compose_file" up -d
 sudo docker compose --env-file "$env_file" -f "$compose_file" exec -T caddy \
   caddy validate --config /etc/caddy/Caddyfile
+sudo docker compose --env-file "$env_file" -f "$compose_file" exec -T caddy \
+  caddy reload --config /etc/caddy/Caddyfile
+
+assert_public_status() {
+  local label="$1"
+  local url="$2"
+  local expected="$3"
+  local status
+
+  status="$(curl --silent --show-error --output /dev/null --max-time 10 --write-out '%{http_code}' "$url")"
+  if [[ "$status" != "$expected" ]]; then
+    printf '%s smoke check failed: expected HTTP %s, got %s (%s)\n' \
+      "$label" "$expected" "$status" "$url" >&2
+    exit 1
+  fi
+}
+
+assert_public_not_missing() {
+  local label="$1"
+  local url="$2"
+  local status
+
+  status="$(curl --silent --show-error --output /dev/null --max-time 10 --write-out '%{http_code}' "$url")"
+  if [[ "$status" == 000 || "$status" == 404 || "$status" =~ ^5 ]]; then
+    printf '%s smoke check failed: HTTP %s (%s)\n' "$label" "$status" "$url" >&2
+    exit 1
+  fi
+}
+
+assert_public_status 'CRM application' "https://${app_domain}/" 200
+assert_public_status 'WVP interface' "https://${app_domain}/wvp/" 200
+# This endpoint can require a WVP login and return 401/403. A 404 or 5xx means
+# the absolute /api namespace is no longer reaching the WVP backend.
+assert_public_not_missing 'WVP API proxy' "https://${app_domain}/api/server/system/info"
 
 api_container="$(sudo docker compose --env-file "$env_file" -f "$compose_file" ps -q api)"
 web_container="$(sudo docker compose --env-file "$env_file" -f "$compose_file" ps -q web)"

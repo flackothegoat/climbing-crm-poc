@@ -17,6 +17,14 @@
     reverse_proxy wvp-ui:8080
   }
 
+  # The WVP UI is hosted below /wvp, but its compiled client calls an absolute
+  # /api path. Keep that namespace dedicated to the WVP backend; the CRM API is
+  # intentionally exposed through /backend below.
+  @wvpApi path /api/*
+  handle @wvpApi {
+    reverse_proxy wvp:18978
+  }
+
   @backend path /backend/*
   handle @backend {
     header >Cache-Control "private, no-store"
