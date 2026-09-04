@@ -17,11 +17,9 @@
     reverse_proxy wvp-ui:8080
   }
 
-  # The WVP UI is hosted below /wvp, but its compiled client calls an absolute
-  # /api path. Keep that namespace dedicated to the WVP backend; the CRM API is
-  # intentionally exposed through /backend below.
-  @wvpApi path /api/*
-  handle @wvpApi {
+  # The WVP UI is compiled with VUE_APP_BASE_API=/wvp-api. Strip that external
+  # prefix so /wvp-api/api/... reaches the WVP backend as /api/....
+  handle_path /wvp-api/* {
     reverse_proxy wvp:18978
   }
 

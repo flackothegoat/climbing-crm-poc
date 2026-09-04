@@ -85,8 +85,8 @@ assert_public_not_missing() {
 assert_public_status 'CRM application' "https://${app_domain}/" 200
 assert_public_status 'WVP interface' "https://${app_domain}/wvp/" 200
 # This endpoint can require a WVP login and return 401/403. A 404 or 5xx means
-# the absolute /api namespace is no longer reaching the WVP backend.
-assert_public_not_missing 'WVP API proxy' "https://${app_domain}/api/server/system/info"
+# the UI's configured /wvp-api namespace is no longer reaching the WVP backend.
+assert_public_not_missing 'WVP API proxy' "https://${app_domain}/wvp-api/api/server/system/info"
 
 api_container="$(sudo docker compose --env-file "$env_file" -f "$compose_file" ps -q api)"
 web_container="$(sudo docker compose --env-file "$env_file" -f "$compose_file" ps -q web)"
