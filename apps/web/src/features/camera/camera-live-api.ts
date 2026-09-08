@@ -1,4 +1,4 @@
-import { apiRequest, apiRequestBlobResponse } from '../../lib/api';
+import { apiBaseUrl, apiRequest, apiRequestBlobResponse } from '../../lib/api';
 
 export interface CameraLiveConfiguration {
   id: string;
@@ -36,6 +36,7 @@ export interface CameraObservation {
   observedAt: string;
   source: 'CAMERA';
   climberKey: string | null;
+  reviewStatus: 'UNREVIEWED' | 'CONFIRMED' | 'OVERRIDDEN' | 'INVALIDATED';
   route: { id: string; code: string; name: string; color: string };
   routeVersion: { id: string; versionNumber: number };
   wallSegment: { id: string; code: string; name: string } | null;
@@ -43,11 +44,82 @@ export interface CameraObservation {
     confidence?: number;
     requiresReview?: boolean;
     failureReasons?: string[];
+    modelVersion?: string;
+    calibrationId?: string;
+    startedAtS?: number;
+    finishReachedAtS?: number;
+    fallAtS?: number;
+    events?: Array<{
+      type: string;
+      timestampS: number;
+      confidence: number;
+      evidence: string;
+    }>;
+  } | null;
+  evidence: {
+    id: string;
+    status: 'AVAILABLE' | 'EXPIRED';
+    contentType: string;
+    sizeBytes: number;
+    durationMs: number;
+    expiresAt: string;
+    expiredAt: string | null;
+  } | null;
+  latestReview: {
+    id: string;
+    decision: CameraObservationReviewDecision;
+    finalOutcome: CameraObservation['outcome'] | null;
+    comment: string | null;
+    createdAt: string;
+    reviewedBy: { id: string; email: string };
   } | null;
 }
 
-export const getCameraObservations = () =>
-  apiRequest<{ items: CameraObservation[] }>('/camera/observations?pageSize=12');
+export interface CameraObservationFilters {
+  pageSize?: number;
+  cursor?: string;
+  query?: string;
+  outcome?: CameraObservation['outcome'];
+  reviewStatus?: 'PENDING' | CameraObservation['reviewStatus'];
+  observedFrom?: string;
+  observedTo?: string;
+}
+
+export interface CameraObservationList {
+  items: CameraObservation[];
+  nextCursor: string | null;
+}
+
+export type CameraObservationReviewDecision =
+  'CONFIRM' | 'OVERRIDE_COMPLETED' | 'OVERRIDE_FAILED' | 'INVALIDATE';
+
+export function getCameraObservations(filters: CameraObservationFilters = {}) {
+  const query = new URLSearchParams();
+  query.set('pageSize', String(filters.pageSize ?? 10));
+  if (filters.cursor) query.set('cursor', filters.cursor);
+  if (filters.query) query.set('query', filters.query);
+  if (filters.outcome) query.set('outcome', filters.outcome);
+  if (filters.reviewStatus) query.set('reviewStatus', filters.reviewStatus);
+  if (filters.observedFrom) query.set('observedFrom', filters.observedFrom);
+  if (filters.observedTo) query.set('observedTo', filters.observedTo);
+  return apiRequest<CameraObservationList>(`/camera/observations?${query.toString()}`);
+}
+
+export const getCameraObservation = (observationId: string) =>
+  apiRequest<CameraObservation>(`/camera/observations/${observationId}`);
+
+export const reviewCameraObservation = (
+  observationId: string,
+  decision: CameraObservationReviewDecision,
+  comment?: string,
+) =>
+  apiRequest<CameraObservation>(`/camera/observations/${observationId}/reviews`, {
+    method: 'POST',
+    body: JSON.stringify({ decision, comment }),
+  });
+
+export const cameraObservationEvidenceUrl = (observationId: string) =>
+  `${apiBaseUrl}/camera/observations/${observationId}/evidence`;
 
 export interface CameraWorkerStatus {
   status: 'ONLINE' | 'OFFLINE' | 'NOT_CONFIGURED';

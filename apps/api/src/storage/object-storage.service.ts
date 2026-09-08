@@ -47,10 +47,42 @@ export class ObjectStorageService implements OnModuleInit {
     }
   }
 
+  async putStream(
+    objectKey: string,
+    content: Readable,
+    sizeBytes: number,
+    contentType: string,
+  ): Promise<void> {
+    await this.ensureAvailable();
+    try {
+      await withTimeout(
+        this.client.putObject(this.config.values.MINIO_BUCKET, objectKey, content, sizeBytes, {
+          'Content-Type': contentType,
+        }),
+        120_000,
+      );
+    } catch (error) {
+      this.markUnavailable(error);
+      throw unavailableError();
+    }
+  }
+
   async get(objectKey: string): Promise<Readable> {
     await this.ensureAvailable();
     try {
       return await withTimeout(this.client.getObject(this.config.values.MINIO_BUCKET, objectKey));
+    } catch (error) {
+      this.markUnavailable(error);
+      throw unavailableError();
+    }
+  }
+
+  async getPartial(objectKey: string, offset: number, length: number): Promise<Readable> {
+    await this.ensureAvailable();
+    try {
+      return await withTimeout(
+        this.client.getPartialObject(this.config.values.MINIO_BUCKET, objectKey, offset, length),
+      );
     } catch (error) {
       this.markUnavailable(error);
       throw unavailableError();
@@ -104,7 +136,7 @@ function unavailableError(): ServiceUnavailableException {
   return new ServiceUnavailableException('对象存储暂时不可用，请稍后重试');
 }
 
-async function withTimeout<T>(promise: Promise<T>): Promise<T> {
+async function withTimeout<T>(promise: Promise<T>, timeoutMs = operationTimeoutMs): Promise<T> {
   let timer: NodeJS.Timeout | undefined;
   try {
     return await Promise.race([
@@ -112,7 +144,7 @@ async function withTimeout<T>(promise: Promise<T>): Promise<T> {
       new Promise<never>((_resolve, reject) => {
         timer = setTimeout(
           () => reject(new Error('object storage operation timed out')),
-          operationTimeoutMs,
+          timeoutMs,
         );
       }),
     ]);

@@ -190,6 +190,26 @@ const checks = {
            AND scope."wallSegmentId" = observation."wallSegmentId"
        ))
   `,
+  cameraObservationReviewScopeMismatch: `
+    SELECT COUNT(*)::int AS count
+    FROM "CameraObservationReview" review
+    JOIN "ClimbObservation" observation ON observation."id" = review."observationId"
+    WHERE observation."organizationId" <> review."organizationId"
+       OR NOT EXISTS (
+         SELECT 1 FROM "Membership" membership
+         WHERE membership."accountId" = review."reviewedByAccountId"
+           AND membership."organizationId" = review."organizationId"
+           AND membership."status" = 'ACTIVE'
+       )
+  `,
+  cameraObservationEvidenceScopeMismatch: `
+    SELECT COUNT(*)::int AS count
+    FROM "CameraObservationEvidence" evidence
+    JOIN "ClimbObservation" observation ON observation."id" = evidence."observationId"
+    WHERE observation."organizationId" <> evidence."organizationId"
+       OR (evidence."status" = 'AVAILABLE' AND evidence."expiredAt" IS NOT NULL)
+       OR (evidence."status" = 'EXPIRED' AND evidence."expiredAt" IS NULL)
+  `,
   negativeInventoryBalance: `
     SELECT COUNT(*)::int AS count
     FROM "HoldInventoryBalance"

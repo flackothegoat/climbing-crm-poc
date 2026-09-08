@@ -1,15 +1,21 @@
 from __future__ import annotations
 
+import os
+import time
 import unittest
 from datetime import datetime, timezone
 from pathlib import Path
+from tempfile import TemporaryDirectory
 
 from live_stream_worker import (
     ClipJob,
     WorkerSettings,
     build_observation_request,
+    discard_unassigned_attempt,
+    file_sha256,
     load_worker_calibration,
     normalize_stream_url,
+    prune_stale_worker_files,
 )
 
 
@@ -72,6 +78,54 @@ class LiveStreamWorkerTest(unittest.TestCase):
         self.assertEqual(first["requestKey"], second["requestKey"])
         self.assertEqual(first["routeVersionId"], "version-1")
         self.assertEqual(first["wallSegmentId"], "segment-1")
+
+    def test_discards_unassigned_video_and_analysis_artifacts(self) -> None:
+        with TemporaryDirectory() as directory:
+            root = Path(directory)
+            video = root / "temporary-clips" / "live-001.mp4"
+            output = root / "attempts" / "live-001"
+            video.parent.mkdir(parents=True)
+            output.mkdir(parents=True)
+            video.write_bytes(b"temporary-video")
+            (output / "summary.json").write_text("{}", encoding="utf-8")
+            job = ClipJob(
+                attempt_id="live-001",
+                video_path=video,
+                observed_at=datetime(2026, 8, 27, tzinfo=timezone.utc).isoformat(),
+                duration_s=42,
+            )
+
+            discard_unassigned_attempt(job, output)
+
+            self.assertFalse(video.exists())
+            self.assertFalse(output.exists())
+
+    def test_calculates_video_checksum_without_loading_entire_file(self) -> None:
+        with TemporaryDirectory() as directory:
+            video = Path(directory) / "evidence.mp4"
+            video.write_bytes(b"camera-evidence")
+
+            self.assertEqual(
+                file_sha256(video),
+                "f5cee54fb1838c897dd490afc0f2eb07e1b69487179819a8a9331f082db19a0c",
+            )
+
+    def test_prunes_only_expired_temporary_files(self) -> None:
+        with TemporaryDirectory() as directory:
+            root = Path(directory)
+            clips = root / "temporary-clips"
+            clips.mkdir()
+            expired = clips / "expired.mp4"
+            current = clips / "current.mp4"
+            expired.write_bytes(b"expired")
+            current.write_bytes(b"current")
+            old_time = time.time() - 25 * 60 * 60
+            os.utime(expired, (old_time, old_time))
+
+            prune_stale_worker_files(root)
+
+            self.assertFalse(expired.exists())
+            self.assertTrue(current.exists())
 
 
 if __name__ == "__main__":

@@ -313,6 +313,25 @@ enum ClimbObservationSource {
   CAMERA
 }
 
+enum CameraObservationReviewStatus {
+  UNREVIEWED
+  CONFIRMED
+  OVERRIDDEN
+  INVALIDATED
+}
+
+enum CameraObservationReviewDecision {
+  CONFIRM
+  OVERRIDE_COMPLETED
+  OVERRIDE_FAILED
+  INVALIDATE
+}
+
+enum CameraObservationEvidenceStatus {
+  AVAILABLE
+  EXPIRED
+}
+
 enum WallGeometryVersionStatus {
   DRAFT
   PUBLISHED
@@ -415,6 +434,7 @@ model Account {
   createdCameraRouteDefinitions    CameraRouteDefinition[]     @relation("CameraRouteDefinitionCreator")
   updatedCameraRouteDefinitions    CameraRouteDefinition[]     @relation("CameraRouteDefinitionUpdater")
   createdClimbObservations         ClimbObservation[]          @relation("ClimbObservationCreator")
+  cameraObservationReviews         CameraObservationReview[]   @relation("CameraObservationReviewer")
   createdWallGeometryVersions      WallGeometryVersion[]       @relation("WallGeometryVersionCreator")
   createdWallAssets                WallAsset[]                 @relation("WallAssetCreator")
   createdWallCaptures              WallCapture[]               @relation("WallCaptureCreator")
@@ -451,6 +471,8 @@ model Organization {
   routeVersions               RouteVersion[]
   routeHoldPlacements         RouteHoldPlacement[]
   climbObservations           ClimbObservation[]
+  cameraObservationReviews    CameraObservationReview[]
+  cameraObservationEvidence   CameraObservationEvidence[]
   wallGeometryVersions        WallGeometryVersion[]
   wallAssets                  WallAsset[]
   wallCaptures                WallCapture[]
@@ -1295,7 +1317,7 @@ model RouteHoldPlacement {
 }
 
 model ClimbObservation {
-  id                    String                  @id @default(cuid())
+  id                    String                        @id @default(cuid())
   organizationId        String
   wallSegmentId         String?
   routeId               String
@@ -1307,20 +1329,62 @@ model ClimbObservation {
   requestKey            String?
   correctsObservationId String?
   createdByAccountId    String?
+  reviewStatus          CameraObservationReviewStatus @default(UNREVIEWED)
   metadata              Json?
-  organization          Organization            @relation(fields: [organizationId], references: [id], onDelete: Restrict)
-  wallSegment           WallSegment?            @relation(fields: [wallSegmentId], references: [id], onDelete: Restrict)
-  route                 Route                   @relation(fields: [routeId], references: [id], onDelete: Restrict)
-  routeVersion          RouteVersion            @relation(fields: [routeVersionId], references: [id], onDelete: Restrict)
-  correctsObservation   ClimbObservation?       @relation("ObservationCorrection", fields: [correctsObservationId], references: [id], onDelete: Restrict)
-  correctedBy           ClimbObservation[]      @relation("ObservationCorrection")
-  createdBy             Account?                @relation("ClimbObservationCreator", fields: [createdByAccountId], references: [id], onDelete: Restrict)
-  createdAt             DateTime                @default(now())
+  organization          Organization                  @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  wallSegment           WallSegment?                  @relation(fields: [wallSegmentId], references: [id], onDelete: Restrict)
+  route                 Route                         @relation(fields: [routeId], references: [id], onDelete: Restrict)
+  routeVersion          RouteVersion                  @relation(fields: [routeVersionId], references: [id], onDelete: Restrict)
+  correctsObservation   ClimbObservation?             @relation("ObservationCorrection", fields: [correctsObservationId], references: [id], onDelete: Restrict)
+  correctedBy           ClimbObservation[]            @relation("ObservationCorrection")
+  createdBy             Account?                      @relation("ClimbObservationCreator", fields: [createdByAccountId], references: [id], onDelete: Restrict)
+  reviews               CameraObservationReview[]
+  evidence              CameraObservationEvidence?
+  createdAt             DateTime                      @default(now())
 
   @@unique([organizationId, requestKey])
   @@index([organizationId, observedAt])
   @@index([wallSegmentId, observedAt])
   @@index([routeId, observedAt])
+  @@index([organizationId, reviewStatus, observedAt])
+}
+
+model CameraObservationReview {
+  id                  String                          @id @default(cuid())
+  organizationId      String
+  observationId       String
+  decision            CameraObservationReviewDecision
+  finalOutcome        ClimbObservationOutcome?
+  comment             String?
+  reviewedByAccountId String
+  organization        Organization                    @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  observation         ClimbObservation                @relation(fields: [observationId], references: [id], onDelete: Restrict)
+  reviewedBy          Account                         @relation("CameraObservationReviewer", fields: [reviewedByAccountId], references: [id], onDelete: Restrict)
+  createdAt           DateTime                        @default(now())
+
+  @@index([organizationId, createdAt])
+  @@index([observationId, createdAt])
+}
+
+model CameraObservationEvidence {
+  id             String                          @id @default(cuid())
+  organizationId String
+  observationId  String                          @unique
+  objectKey      String                          @unique
+  contentType    String
+  sizeBytes      Int
+  checksumSha256 String
+  durationMs     Int
+  status         CameraObservationEvidenceStatus @default(AVAILABLE)
+  expiresAt      DateTime
+  expiredAt      DateTime?
+  organization   Organization                    @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  observation    ClimbObservation                @relation(fields: [observationId], references: [id], onDelete: Restrict)
+  createdAt      DateTime                        @default(now())
+  updatedAt      DateTime                        @updatedAt
+
+  @@index([organizationId, expiresAt])
+  @@index([status, expiresAt])
 }
 
 model CameraRouteDefinition {

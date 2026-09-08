@@ -13,6 +13,7 @@ export enum Capability {
   ASSET_READ = 'ASSET_READ',
   ASSET_DRAFT_WRITE = 'ASSET_DRAFT_WRITE',
   ASSET_PUBLISH = 'ASSET_PUBLISH',
+  OBSERVATION_REVIEW = 'OBSERVATION_REVIEW',
 }
 
 const l2Capabilities = new Set([
@@ -22,6 +23,7 @@ const l2Capabilities = new Set([
   Capability.HOLD_RECEIVE,
   Capability.ASSET_READ,
   Capability.ASSET_DRAFT_WRITE,
+  Capability.OBSERVATION_REVIEW,
 ]);
 
 const roleCapabilities: Record<MembershipRole, ReadonlySet<Capability>> = {
