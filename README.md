@@ -24,12 +24,42 @@ pnpm dev
 
 Web 开发服务与生产构建分别使用 `.next-dev` 和 `.next-build`，因此可以在 `pnpm dev` 运行期间安全执行 `pnpm build`，不会覆盖正在使用的页面样式资源。
 
+## 本地视觉 Worker
+
+本地 Worker 复用生产算法代码，但只连接本机 API、写入本地 PostgreSQL；启动本地 Worker 不会修改或重启 Azure Worker。先在 `.env` 中配置与 API 相同的 `CAMERA_WORKER_TOKEN`、本地组织的 `CAMERA_WORKER_ORGANIZATION_ID` 和可从开发机访问的 `CAMERA_RESOURCE_URL`。
+
+首次准备独立 Python 3.11/3.12 环境：
+
+```bash
+pnpm worker:setup
+```
+
+开发时分别运行：
+
+```bash
+# 终端一：Web 与 API
+pnpm dev
+
+# 终端二：先验证实时流，再持续运行 Worker
+pnpm worker:probe
+pnpm worker:dev
+```
+
+另一个终端可随时检查心跳：
+
+```bash
+pnpm worker:status
+```
+
+Worker 启动时必须从本地 API 读取到至少一条已发布的摄像头线路定义，否则会明确退出。运行状态也可在 `/dashboard/camera` 查看；输出参考帧和尝试片段默认保存在 `tmp/vision-worker`，不会进入 Git。若本机已有兼容的 Python 环境，可在 `.env` 设置 `CAMERA_WORKER_PYTHON` 跳过独立环境安装。
+
 ## 验证
 
 ```bash
 pnpm lint
 pnpm typecheck
 pnpm test
+pnpm worker:test
 pnpm build
 ```
 

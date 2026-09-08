@@ -50,3 +50,4 @@ temp/
 .DS_Store
 __pycache__/
 *.pyc
+services/vision-worker/.venv/

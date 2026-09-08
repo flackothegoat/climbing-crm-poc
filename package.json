@@ -17,6 +17,11 @@
     "services:up": "docker compose --env-file .env -f infra/compose.yaml up -d",
     "services:down": "docker compose --env-file .env -f infra/compose.yaml down",
     "services:status": "docker compose --env-file .env -f infra/compose.yaml ps",
+    "worker:setup": "./infra/setup-local-vision-worker.sh",
+    "worker:dev": "./infra/run-local-vision-worker.sh",
+    "worker:probe": "./infra/run-local-vision-worker.sh --probe-seconds 5",
+    "worker:status": "./infra/check-local-vision-worker.sh",
+    "worker:test": "./infra/test-local-vision-worker.sh",
     "db:migrate": "pnpm --filter @climbing-crm/api prisma migrate dev",
     "db:generate": "pnpm --filter @climbing-crm/api prisma generate"
   },
