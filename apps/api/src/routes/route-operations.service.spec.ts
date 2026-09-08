@@ -1,4 +1,11 @@
-import { ClimbingColor, MembershipRole, RouteStatus } from '@prisma/client';
+import {
+  ClimbObservationOutcome,
+  ClimbObservationSource,
+  ClimbingColor,
+  MembershipRole,
+  RouteStatus,
+  RouteVersionStatus,
+} from '@prisma/client';
 import { describe, expect, it, vi } from 'vitest';
 import type { CurrentSession } from '../auth/session.service';
 import type { AuditService } from '../common/audit.service';
@@ -62,6 +69,103 @@ describe('RouteOperationsService 第一阶段线路建档', () => {
         where: expect.objectContaining({
           status: { in: [RouteStatus.PUBLISHED, RouteStatus.INACTIVE] },
         }),
+      }),
+    );
+  });
+
+  it('单线路复盘只聚合该线路的 Worker 识别与真实扫码反馈', async () => {
+    const prisma = {
+      route: {
+        findMany: vi.fn().mockResolvedValue([
+          {
+            id: 'route-1',
+            code: 'W04-001',
+            name: '蓝色测试线',
+            status: RouteStatus.PUBLISHED,
+            publishedAt: new Date('2026-09-01T00:00:00.000Z'),
+            retiredAt: null,
+            versions: [
+              {
+                id: 'version-1',
+                versionNumber: 1,
+                status: RouteVersionStatus.PUBLISHED,
+                grade: 'V3',
+                color: ClimbingColor.BLUE,
+                wallSegments: [],
+              },
+            ],
+          },
+        ]),
+      },
+      routeFeedback: {
+        groupBy: vi.fn().mockResolvedValue([
+          {
+            routeVersionId: 'version-1',
+            outcome: 'COMPLETED',
+            difficulty: 'AS_EXPECTED',
+            enjoyment: 'LIKE',
+            safetyConcern: false,
+            _count: { _all: 1 },
+          },
+        ]),
+      },
+      climbObservation: {
+        groupBy: vi.fn().mockResolvedValue([
+          {
+            routeVersionId: 'version-1',
+            outcome: ClimbObservationOutcome.COMPLETED,
+            _count: { _all: 1 },
+          },
+          {
+            routeVersionId: 'version-1',
+            outcome: ClimbObservationOutcome.FAILED,
+            _count: { _all: 1 },
+          },
+          {
+            routeVersionId: 'version-1',
+            outcome: ClimbObservationOutcome.UNKNOWN,
+            _count: { _all: 1 },
+          },
+        ]),
+      },
+    } as unknown as PrismaService;
+    const service = new RouteOperationsService(
+      prisma,
+      {} as AuditService,
+      new AccessControlService(),
+      {} as TokenService,
+    );
+
+    const result = await service.analytics(session, {}, 'route-1');
+
+    expect(prisma.route.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({ id: 'route-1', organizationId: 'org-1' }),
+      }),
+    );
+    expect(prisma.climbObservation.groupBy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        by: ['routeVersionId', 'outcome'],
+        where: expect.objectContaining({
+          organizationId: 'org-1',
+          routeVersionId: { in: ['version-1'] },
+          source: ClimbObservationSource.CAMERA,
+        }),
+      }),
+    );
+    expect(result.items[0]).toEqual(
+      expect.objectContaining({
+        routeId: 'route-1',
+        algorithm: {
+          sampleSize: 3,
+          completed: 1,
+          failed: 1,
+          abandoned: 0,
+          unknown: 1,
+          completionRate: 50,
+        },
+        sampleSize: 1,
+        respondentCompletionRate: 100,
       }),
     );
   });

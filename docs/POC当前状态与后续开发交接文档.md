@@ -1,12 +1,12 @@
 # POC 当前状态与后续开发交接文档
 
-> 更新日期：2026-09-08
+> 更新日期：2026-09-09
 >
 > 代码目录：`/Users/flacko/Documents/Codex/SummerIntern/poc`
 >
 > 当前分支：`main`
 >
-> 稳定基线：本文档所在提交，包含本地 Vision Worker、识别历史、录像证据和人工复核闭环
+> 稳定基线：本文档所在提交，包含本地 Vision Worker、识别历史、录像证据、人工复核和单线路双来源复盘
 >
 > 部署边界：本次只修改本地代码，**未部署 Azure，未修改云端数据库、WVP、NSG 或 Worker**
 
@@ -30,6 +30,9 @@ POC 已从早期“岩点库 + 线路库”扩展为可运行、可追溯的摄�
 - 线路卡片显示截图缩略图，点击后查看完整截图。
 - 状态为 `PUBLISHED` 时正常使用；`INACTIVE` 时保留并可恢复/删除；`REMOVED` 时仅保留历史，普通页面不展示。
 - 公开二维码反馈是主动反馈样本，不能冒充全馆客流或真实完攀率。
+- 全局“反馈与复盘”入口已取消；每张线路卡片提供独立入口，后端按 `routeId` 和 `routeVersionId` 隔离数据。
+- 线路复盘分为“算法识别”和“扫码反馈”两个明确区域；无数据时展示空状态，不生成模拟值。
+- 算法统计只读取 `source=CAMERA` 的 Worker 落库记录，完攀率为 `COMPLETED / (COMPLETED + FAILED)`，`ABANDONED` 和 `UNKNOWN` 单列。
 
 ### 2.3 摄像头和视觉 Worker
 
@@ -44,15 +47,15 @@ POC 已从早期“岩点库 + 线路库”扩展为可运行、可追溯的摄�
 
 ### 2.4 识别历史与人工复核
 
-- 摄像头首页明确显示最近 10 条，完整历史使用服务端游标分页。
-- 支持线路编号/名称、算法结果、复核状态和日期范围筛选。
+- 摄像头页的标题统一为“识别结果”，默认读取最近 10 条，并在区域底部明示口径；完整历史使用服务端游标分页。
+- 线路编号/名称、算法结果、复核状态和日期范围筛选始终显示，无需先点“查看全部”。
 - 页面区分算法原判、规则型算法评分、人工最终结论和复核状态；不把评分描述为统计正确概率。
 - 复核采用不可变追加记录，可以确认原判、改判完攀、改判失败或标记无效；改判和无效必须填写原因。
 - 录像通过登录权限和 HTTP Range 播放，不保存到 PostgreSQL，也不提供永久公开地址。
 - 普通录像保留 72 小时，待复核 14 天，确认/无效后 72 小时，改判后 30 天；结构化历史永久保留。
 - 完整技术边界见 `docs/摄像头识别历史与人工复核设计.md`。
 
-## 3. 本次第6项修复
+## 3. 近期线路可见性与复盘改进
 
 问题不是数据库恢复了已删除线路，而是反馈分析查询主动包含了 `REMOVED`。
 
@@ -70,6 +73,12 @@ POC 已从早期“岩点库 + 线路库”扩展为可运行、可追溯的摄�
 - `apps/api/src/routes/route-operations.service.spec.ts`
 
 **这项修复尚未部署到 Azure。** 下次正式发布后云端才会获得相同行为。
+
+单线路复盘当前行为：
+
+- `GET /api/route-operations/:routeId/analytics` 在组织权限内只返回该线路的非草稿版本。
+- Worker 结果按线路版本和原始 outcome 在数据库聚合；扫码反馈按 outcome、难度、喜好和安全疑虑聚合，不把全量明细加载到 API 内存。
+- 页面明确标注数据来源和指标分母，两类数据不混算。
 
 ## 4. 本地与 Azure 必须分开理解
 
@@ -111,23 +120,23 @@ POC 已从早期“岩点库 + 线路库”扩展为可运行、可追溯的摄�
 
 ## 7. 关键实现位置
 
-| 功能                      | 位置                                                         |
-| ------------------------- | ------------------------------------------------------------ |
-| 线路 CRUD、状态与反馈分析 | `apps/api/src/routes/route-operations.service.ts`            |
-| 线路库前端                | `apps/web/src/features/routes/route-operations-page.tsx`     |
-| 反馈与复盘前端            | `apps/web/src/features/routes/route-analytics-page.tsx`      |
-| 摄像头实时页              | `apps/web/src/features/camera/camera-live-page.tsx`          |
-| SlimSAM 视觉配置          | `apps/web/src/features/camera/camera-route-configurator.tsx` |
-| 单块提示分割              | `apps/web/src/features/camera/prompt-segment-hold.ts`        |
-| 截帧与最近成功回退        | `apps/api/src/camera/camera-snapshot.service.ts`             |
-| 视觉定义 API              | `apps/api/src/camera/camera-route-definition.service.ts`     |
-| 实时 Worker               | `services/vision-worker/live_stream_worker.py`               |
-| 识别历史与复核前端        | `apps/web/src/features/camera/camera-observation-panel.tsx`  |
-| 识别历史与复核 API        | `apps/api/src/camera/camera-observation.service.ts`          |
-| 录像证据与过期            | `apps/api/src/camera/camera-observation-evidence.service.ts` |
-| 本地 Worker 启动与检查    | `infra/run-local-vision-worker.sh` 等本地脚本                |
-| 摄像头/Worker 设计文档    | `docs/摄像头实时视频与攀岩识别POC.md`                        |
-| 可重复生产部署            | `infra/deploy-production.sh`                                 |
+| 功能                              | 位置                                                         |
+| --------------------------------- | ------------------------------------------------------------ |
+| 线路 CRUD、状态与单线路双来源分析 | `apps/api/src/routes/route-operations.service.ts`            |
+| 线路库前端                        | `apps/web/src/features/routes/route-operations-page.tsx`     |
+| 反馈与复盘前端                    | `apps/web/src/features/routes/route-analytics-page.tsx`      |
+| 摄像头实时页                      | `apps/web/src/features/camera/camera-live-page.tsx`          |
+| SlimSAM 视觉配置                  | `apps/web/src/features/camera/camera-route-configurator.tsx` |
+| 单块提示分割                      | `apps/web/src/features/camera/prompt-segment-hold.ts`        |
+| 截帧与最近成功回退                | `apps/api/src/camera/camera-snapshot.service.ts`             |
+| 视觉定义 API                      | `apps/api/src/camera/camera-route-definition.service.ts`     |
+| 实时 Worker                       | `services/vision-worker/live_stream_worker.py`               |
+| 识别历史与复核前端                | `apps/web/src/features/camera/camera-observation-panel.tsx`  |
+| 识别历史与复核 API                | `apps/api/src/camera/camera-observation.service.ts`          |
+| 录像证据与过期                    | `apps/api/src/camera/camera-observation-evidence.service.ts` |
+| 本地 Worker 启动与检查            | `infra/run-local-vision-worker.sh` 等本地脚本                |
+| 摄像头/Worker 设计文档            | `docs/摄像头实时视频与攀岩识别POC.md`                        |
+| 可重复生产部署                    | `infra/deploy-production.sh`                                 |
 
 ## 8. 本地运行与验证
 
@@ -149,15 +158,15 @@ pnpm worker:status
 - PostgreSQL：`localhost:5434`
 - MinIO Console：`http://localhost:9003`
 
-本次基线验证（2026-09-08）：
+本次基线验证（2026-09-09）：
 
 - `pnpm lint`：通过。
 - `pnpm typecheck`：通过。
-- `pnpm test`：通过；当前 `main` 为 API 126 项、Web 33 项，共 159 项单元测试通过；8 项显式数据库集成测试按默认策略跳过。
+- `pnpm test`：通过；当前为 API 127 项、Web 33 项，共 160 项单元测试通过；8 项显式数据库集成测试按默认策略跳过。
 - `pnpm worker:test`：11 项 Worker 测试通过。
 - `pnpm build`：API 和 Web 生产构建通过。
 - 本地 migration 已应用至 `20260908170000_camera_observation_evidence_constraints`，数据库不变量全部为 0。
-- 本地页面已验证“最近10条”“查看全部”和筛选界面可正常加载。
+- 本地页面已验证识别筛选始终可见、默认最近 10 条提示、每张线路卡片的独立复盘入口，以及算法/扫码双区域空数据展示。
 - 本地 Worker 成功读取 WVP H.264 3840×2160、15 FPS 实时流，并从本地 API 读取 2 条已发布线路定义；心跳为 `ONLINE`。
 - 本次未部署或修改 Azure；云端数据库尚未应用识别复核与录像证据 migration。
 

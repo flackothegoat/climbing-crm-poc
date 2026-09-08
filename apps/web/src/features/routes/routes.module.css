@@ -182,97 +182,141 @@
   line-height: 1.55;
 }
 
-.analyticsList {
+.sourceNotices,
+.versionReviewList {
   display: grid;
+  gap: 14px;
 }
 
-.analyticsRow {
-  display: grid;
-  grid-template-columns: minmax(180px, 1.35fr) repeat(5, minmax(105px, 0.72fr)) minmax(150px, 1fr);
-  align-items: stretch;
-  border-bottom: 1px solid #e5ebe7;
+.sourceNotices {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
-.analyticsRow:last-child {
-  border-bottom: 0;
-}
-
-.analyticsIdentity,
-.analyticsMetric,
-.recommendation {
-  min-width: 0;
+.versionIdentity {
   display: flex;
-  flex-direction: column;
-  justify-content: center;
-  gap: 5px;
-  padding: 18px 14px;
-}
-
-.analyticsIdentity {
-  flex-direction: row;
   align-items: center;
-  justify-content: flex-start;
-  gap: 12px;
+  gap: 10px;
+  padding: 16px 20px 0;
 }
 
-.analyticsIdentity > span {
-  width: 7px;
-  height: 48px;
+.versionIdentity span {
+  width: 8px;
+  height: 32px;
   flex: 0 0 auto;
   border-radius: 99px;
 }
 
-.analyticsIdentity div {
-  min-width: 0;
-  display: grid;
-  gap: 3px;
+.versionIdentity p {
+  margin: 0;
+  color: #66766f;
+  font-size: 12px;
 }
 
-.analyticsIdentity small,
-.analyticsMetric small,
-.recommendation small {
+.analyticsSources {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+  padding: 16px 20px 20px;
+}
+
+.analyticsSource {
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid #dfe7e2;
+  border-radius: 14px;
+  background: #fbfcfb;
+}
+
+.analyticsSource > header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 16px 18px;
+  border-bottom: 1px solid #e8edea;
+  background: #f4f8f5;
+}
+
+.analyticsSource h4,
+.analyticsSource p {
+  margin: 0;
+}
+
+.analyticsSource h4 {
+  color: #183f33;
+  font-size: 16px;
+}
+
+.analyticsSource header p {
+  margin-top: 3px;
+  color: #78877f;
+  font-size: 11px;
+}
+
+.analyticsSource header > span {
+  flex: 0 0 auto;
+  padding: 5px 9px;
+  border-radius: 99px;
+  color: #27614d;
+  background: #e5f0e9;
+  font-size: 10px;
+  font-weight: 800;
+}
+
+.sourceEmpty {
+  padding: 14px 18px;
+  color: #687971;
+  background: #fffdf8;
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.sourceMetrics {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.reviewMetric,
+.sourceRecommendation {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  padding: 16px;
+  border-top: 1px solid #edf1ee;
+  border-right: 1px solid #edf1ee;
+}
+
+.reviewMetric small,
+.sourceRecommendation small {
   color: #84918b;
   font-size: 10px;
   font-weight: 750;
   letter-spacing: 0.04em;
 }
 
-.analyticsIdentity strong {
-  overflow: hidden;
-  color: #204a3c;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+.reviewMetric strong,
+.sourceRecommendation strong {
+  color: #1d4d3d;
+  font-size: 19px;
 }
 
-.analyticsIdentity em,
-.analyticsMetric em {
+.reviewMetric em {
   overflow: hidden;
   color: #7b8882;
   font-size: 10px;
   font-style: normal;
   line-height: 1.4;
-  text-overflow: ellipsis;
 }
 
-.analyticsMetric {
-  border-left: 1px solid #edf1ee;
-}
-
-.analyticsMetric strong {
-  color: #1d4d3d;
-  font-size: 19px;
-}
-
-.recommendation {
-  margin: 12px;
-  padding: 12px;
-  border-radius: 10px;
+.sourceRecommendation {
+  justify-content: center;
   color: #285943;
   background: #eaf3ed;
 }
 
-.recommendation.warning,
-.analyticsMetric.warning {
+.sourceRecommendation.warning,
+.reviewMetric.warning {
   color: #9c493b;
   background: #fff5f2;
 }
@@ -581,12 +625,8 @@
   .wallCreator {
     grid-template-columns: 1fr 1fr;
   }
-  .analyticsRow {
-    grid-template-columns: repeat(3, 1fr);
-  }
-  .analyticsIdentity,
-  .recommendation {
-    grid-column: 1 / -1;
+  .analyticsSources {
+    grid-template-columns: 1fr;
   }
 }
 
@@ -608,8 +648,9 @@
   .routeFacts {
     grid-template-columns: 1fr;
   }
-  .analyticsRow {
-    grid-template-columns: 1fr 1fr;
+  .sourceNotices,
+  .sourceMetrics {
+    grid-template-columns: 1fr;
   }
   .metricNotice {
     align-items: flex-start;

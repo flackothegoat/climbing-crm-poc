@@ -59,6 +59,16 @@ export class RouteOperationsController {
     return this.routes.analytics(session, parseAnalyticsQuery(query));
   }
 
+  @Get(':routeId/analytics')
+  @ApiOperation({ summary: '聚合单条线路的 Worker 识别与二维码反馈' })
+  routeAnalytics(
+    @CurrentSessionContext() session: CurrentSession,
+    @Param('routeId') routeId: unknown,
+    @Query() query: unknown,
+  ) {
+    return this.routes.analytics(session, parseAnalyticsQuery(query), parseRouteId(routeId));
+  }
+
   @Get()
   @ApiOperation({ summary: '读取线路运营档案' })
   list(@CurrentSessionContext() session: CurrentSession, @Query() query: unknown) {

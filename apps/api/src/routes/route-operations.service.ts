@@ -5,6 +5,8 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import {
+  ClimbObservationOutcome,
+  ClimbObservationSource,
   MembershipStatus,
   type ClimbingColor,
   RoutePublicLinkStatus,
@@ -475,10 +477,11 @@ export class RouteOperationsService {
     return this.get(session, routeId);
   }
 
-  async analytics(session: CurrentSession, input: AnalyticsQueryInput) {
+  async analytics(session: CurrentSession, input: AnalyticsQueryInput, routeId?: string) {
     this.access.assert(session, Capability.ASSET_READ);
     const routes = await this.prisma.route.findMany({
       where: {
+        id: routeId,
         organizationId: session.organization.id,
         status: { in: [RouteStatus.PUBLISHED, RouteStatus.INACTIVE] },
         versions: input.wallSegmentId
@@ -493,38 +496,59 @@ export class RouteOperationsService {
             wallSegments: {
               include: { wallSegment: { select: { id: true, code: true, name: true } } },
             },
-            feedback: {
-              where: {
-                submittedAt:
-                  input.from || input.to
-                    ? {
-                        gte: input.from ? new Date(input.from) : undefined,
-                        lt: input.to ? new Date(input.to) : undefined,
-                      }
-                    : undefined,
-              },
-              select: {
-                outcome: true,
-                difficulty: true,
-                enjoyment: true,
-                safetyConcern: true,
-                submittedAt: true,
-              },
-            },
           },
         },
       },
     });
+    if (routeId && routes.length === 0) throw new NotFoundException('可复盘的线路不存在');
+    const routeVersionIds = routes.flatMap((route) =>
+      route.versions
+        .filter((version) => version.status !== RouteVersionStatus.DRAFT)
+        .map((version) => version.id),
+    );
+    const [feedbackGroups, observationGroups] = routeVersionIds.length
+      ? await Promise.all([
+          this.prisma.routeFeedback.groupBy({
+            by: ['routeVersionId', 'outcome', 'difficulty', 'enjoyment', 'safetyConcern'],
+            where: {
+              organizationId: session.organization.id,
+              routeVersionId: { in: routeVersionIds },
+              submittedAt: analyticsTimeRange(input),
+            },
+            _count: { _all: true },
+          }),
+          this.prisma.climbObservation.groupBy({
+            by: ['routeVersionId', 'outcome'],
+            where: {
+              organizationId: session.organization.id,
+              routeVersionId: { in: routeVersionIds },
+              source: ClimbObservationSource.CAMERA,
+              observedAt: analyticsTimeRange(input),
+            },
+            _count: { _all: true },
+          }),
+        ])
+      : [[], []];
     const items = routes.flatMap((route) =>
       route.versions
         .filter((version) => version.status !== RouteVersionStatus.DRAFT)
-        .map((version) => analyticsItem(route, version)),
+        .map((version) =>
+          analyticsItem(route, {
+            ...version,
+            feedback: feedbackGroups.filter((group) => group.routeVersionId === version.id),
+            climbObservations: observationGroups.filter(
+              (group) => group.routeVersionId === version.id,
+            ),
+          }),
+        ),
     );
     return {
       scope: {
         from: input.from ?? null,
         to: input.to ?? null,
         metricNotice: '二维码数据只代表主动反馈样本，不等于全馆真实尝试次数或真实完攀率。',
+        algorithmNotice:
+          '算法识别只统计视觉 Worker 写入该线路版本的真实记录；完攀率不包含放弃和不确定结果。',
       },
       totals: {
         activeRoutes: routes.filter((route) => route.status === RouteStatus.PUBLISHED).length,
@@ -758,19 +782,36 @@ function analyticsItem(
       difficulty: string;
       enjoyment: string;
       safetyConcern: boolean;
-      submittedAt: Date;
+      _count: { _all: number };
+    }>;
+    climbObservations: Array<{
+      outcome: ClimbObservationOutcome;
+      _count: { _all: number };
     }>;
   },
 ) {
-  const sampleSize = version.feedback.length;
+  const sampleSize = version.feedback.reduce((sum, feedback) => sum + feedback._count._all, 0);
   const count = (field: 'outcome' | 'difficulty' | 'enjoyment', value: string) =>
-    version.feedback.filter((feedback) => feedback[field] === value).length;
+    version.feedback
+      .filter((feedback) => feedback[field] === value)
+      .reduce((sum, feedback) => sum + feedback._count._all, 0);
   const completed = count('outcome', 'COMPLETED');
   const easier = count('difficulty', 'EASIER');
   const expected = count('difficulty', 'AS_EXPECTED');
   const harder = count('difficulty', 'HARDER');
   const likes = count('enjoyment', 'LIKE');
-  const safetyConcernCount = version.feedback.filter((feedback) => feedback.safetyConcern).length;
+  const safetyConcernCount = version.feedback
+    .filter((feedback) => feedback.safetyConcern)
+    .reduce((sum, feedback) => sum + feedback._count._all, 0);
+  const algorithmCount = (outcome: ClimbObservationOutcome) =>
+    version.climbObservations
+      .filter((observation) => observation.outcome === outcome)
+      .reduce((sum, observation) => sum + observation._count._all, 0);
+  const algorithmCompleted = algorithmCount(ClimbObservationOutcome.COMPLETED);
+  const algorithmFailed = algorithmCount(ClimbObservationOutcome.FAILED);
+  const algorithmAbandoned = algorithmCount(ClimbObservationOutcome.ABANDONED);
+  const algorithmUnknown = algorithmCount(ClimbObservationOutcome.UNKNOWN);
+  const algorithmDecided = algorithmCompleted + algorithmFailed;
   const percentage = (value: number) =>
     sampleSize ? Math.round((value / sampleSize) * 1000) / 10 : null;
   return {
@@ -785,6 +826,16 @@ function analyticsItem(
     wallSegments: version.wallSegments.map((item) => item.wallSegment),
     publishedAt: route.publishedAt?.toISOString() ?? null,
     retiredAt: route.retiredAt?.toISOString() ?? null,
+    algorithm: {
+      sampleSize: algorithmCompleted + algorithmFailed + algorithmAbandoned + algorithmUnknown,
+      completed: algorithmCompleted,
+      failed: algorithmFailed,
+      abandoned: algorithmAbandoned,
+      unknown: algorithmUnknown,
+      completionRate: algorithmDecided
+        ? Math.round((algorithmCompleted / algorithmDecided) * 1000) / 10
+        : null,
+    },
     sampleSize,
     respondentCompletionRate: percentage(completed),
     difficulty: { easier, expected, harder, expectedRate: percentage(expected) },
@@ -800,6 +851,15 @@ function analyticsItem(
       percentage(likes),
     ),
   };
+}
+
+function analyticsTimeRange(input: AnalyticsQueryInput) {
+  return input.from || input.to
+    ? {
+        gte: input.from ? new Date(input.from) : undefined,
+        lt: input.to ? new Date(input.to) : undefined,
+      }
+    : undefined;
 }
 
 function recommendation(

@@ -89,7 +89,7 @@ export function CameraObservationPanel() {
       <header className={styles.header}>
         <div>
           <small>VISION EVENTS</small>
-          <h3>{expanded ? '全部识别结果' : '最近10条识别结果'}</h3>
+          <h3>识别结果</h3>
         </div>
         <div className={styles.headerActions}>
           <p>保留算法原始判定，并通过人工复核形成最终结论。</p>
@@ -102,14 +102,12 @@ export function CameraObservationPanel() {
         </div>
       </header>
 
-      {expanded ? (
-        <ObservationFilters
-          value={filters}
-          onChange={setFilters}
-          onReset={resetFilters}
-          onSubmit={submitFilters}
-        />
-      ) : null}
+      <ObservationFilters
+        value={filters}
+        onChange={setFilters}
+        onReset={resetFilters}
+        onSubmit={submitFilters}
+      />
       {error ? <p className={styles.error}>{error}</p> : null}
       <CameraObservationTable items={items} loading={loading} onSelect={openDetail} />
       {expanded && nextCursor ? (
@@ -123,6 +121,7 @@ export function CameraObservationPanel() {
           </button>
         </div>
       ) : null}
+      {!expanded ? <p className={styles.limitHint}>只显示最近10条</p> : null}
       {selected ? (
         <CameraObservationDetail
           observation={selected}
