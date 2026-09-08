@@ -87,6 +87,14 @@ export interface RouteAnalyticsItem {
   wallSegments: RouteWallSegment[];
   publishedAt: string | null;
   retiredAt: string | null;
+  algorithm: {
+    sampleSize: number;
+    completed: number;
+    failed: number;
+    abandoned: number;
+    unknown: number;
+    completionRate: number | null;
+  };
   sampleSize: number;
   respondentCompletionRate: number | null;
   difficulty: { easier: number; expected: number; harder: number; expectedRate: number | null };
@@ -97,7 +105,12 @@ export interface RouteAnalyticsItem {
 }
 
 export interface RouteAnalytics {
-  scope: { from: string | null; to: string | null; metricNotice: string };
+  scope: {
+    from: string | null;
+    to: string | null;
+    metricNotice: string;
+    algorithmNotice: string;
+  };
   totals: { activeRoutes: number; routeVersions: number; feedback: number; safetyConcerns: number };
   items: RouteAnalyticsItem[];
 }
@@ -123,7 +136,8 @@ export interface PublicRoute {
 export const getRouteContext = () => apiRequest<RouteContext>('/route-operations/context');
 export const getOperationalRoutes = () =>
   apiRequest<{ items: OperationalRoute[] }>('/route-operations').then((page) => page.items);
-export const getRouteAnalytics = () => apiRequest<RouteAnalytics>('/route-operations/analytics');
+export const getRouteAnalytics = (routeId: string) =>
+  apiRequest<RouteAnalytics>(`/route-operations/${encodeURIComponent(routeId)}/analytics`);
 
 export const createOperationalRoute = (input: CreateRouteInput) =>
   apiRequest<OperationalRoute>('/route-operations', {

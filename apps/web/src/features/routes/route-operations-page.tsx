@@ -36,7 +36,7 @@ export function RouteOperationsPage() {
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState<OperationalRoute | null>(null);
   const [qrRoute, setQrRoute] = useState<OperationalRoute | null>(null);
-  const [view, setView] = useState<'CATALOG' | 'ANALYTICS'>('CATALOG');
+  const [analyticsRoute, setAnalyticsRoute] = useState<OperationalRoute | null>(null);
   const [routeQuery, setRouteQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<'ALL' | 'PUBLISHED' | 'INACTIVE'>('ALL');
 
@@ -79,27 +79,8 @@ export function RouteOperationsPage() {
     setShowForm(true);
   }
 
-  if (view === 'ANALYTICS') {
-    return (
-      <div className="page-stack">
-        <PageHeading
-          eyebrow="线路库 · 反馈复盘"
-          title="线路表现"
-          description="按线路版本查看二维码反馈、难度偏差和安全疑虑。"
-          aside={
-            <button
-              className={styles.secondaryButton}
-              type="button"
-              onClick={() => setView('CATALOG')}
-            >
-              返回线路档案
-            </button>
-          }
-        />
-        <RouteAnalyticsPage embedded />
-      </div>
-    );
-  }
+  if (analyticsRoute)
+    return <RouteAnalyticsPage route={analyticsRoute} onBack={() => setAnalyticsRoute(null)} />;
 
   return (
     <div className="page-stack">
@@ -107,15 +88,6 @@ export function RouteOperationsPage() {
         eyebrow="第一阶段 · 线路数字化"
         title="线路库"
         description="浏览、查询和维护从真实墙面视觉配置创建的线路。"
-        aside={
-          <button
-            className={styles.secondaryButton}
-            type="button"
-            onClick={() => setView('ANALYTICS')}
-          >
-            反馈与复盘
-          </button>
-        }
       />
       <StatGrid
         items={[
@@ -173,6 +145,7 @@ export function RouteOperationsPage() {
                 route={route}
                 onEdit={() => edit(route)}
                 onQr={() => setQrRoute(route)}
+                onAnalytics={() => setAnalyticsRoute(route)}
                 onChanged={refresh}
                 onError={setMessage}
               />
@@ -199,12 +172,14 @@ function RouteCard({
   route,
   onEdit,
   onQr,
+  onAnalytics,
   onChanged,
   onError,
 }: {
   route: OperationalRoute;
   onEdit: () => void;
   onQr: () => void;
+  onAnalytics: () => void;
   onChanged: () => Promise<void>;
   onError: (message: string) => void;
 }) {
@@ -290,6 +265,9 @@ function RouteCard({
               : `更新于 ${formatDate(route.updatedAt)}`}
       </p>
       <div className={styles.cardActions}>
+        <button type="button" onClick={onAnalytics}>
+          反馈与复盘
+        </button>
         {route.actions.canEdit && (
           <button type="button" onClick={onEdit}>
             编辑信息

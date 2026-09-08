@@ -194,6 +194,15 @@
   padding: 16px;
 }
 
+.limitHint {
+  margin: 0;
+  padding: 13px 24px;
+  color: var(--dashboard-muted);
+  background: #fafbf9;
+  font-size: 11px;
+  text-align: center;
+}
+
 .backdrop {
   position: fixed;
   z-index: 40;
