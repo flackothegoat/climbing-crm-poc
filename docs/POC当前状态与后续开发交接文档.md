@@ -6,13 +6,13 @@
 >
 > 当前分支：`main`
 >
-> 稳定基线：本文档所在提交，包含“反馈与复盘隐藏已删除线路”的本地修复
+> 稳定基线：本文档所在提交，包含“反馈与复盘隐藏已删除线路”和本地 Vision Worker 接入
 >
 > 部署边界：本次只修改本地代码，**未部署 Azure，未修改云端数据库、WVP、NSG 或 Worker**
 
 ## 1. 一句话状态
 
-POC 已从早期“岩点库 + 线路库”扩展为可运行的摄像头视觉闭环：用户通过 SlimSAM 逐块标注线路岩点和起终点，视觉定义与线路版本绑定，实时 Worker 按 API 下发的已发布定义监控并回写真实观察。线路库支持正常、已停用和语义删除，历史数据不物理删除。
+POC 已从早期“岩点库 + 线路库”扩展为可运行的摄像头视觉闭环：用户通过 SlimSAM 逐块标注线路岩点和起终点，视觉定义与线路版本绑定，实时 Worker 按 API 下发的已发布定义监控并回写真实观察。生产与本地 Worker 相互独立；本地现可连接同一实时流并只向本地 API、PostgreSQL 写入心跳和真实观察。线路库支持正常、已停用和语义删除，历史数据不物理删除。
 
 ## 2. 产品主线
 
@@ -63,10 +63,10 @@ POC 已从早期“岩点库 + 线路库”扩展为可运行的摄像头视觉�
 
 | 项目     | 本地                                                | Azure 生产                                          |
 | -------- | --------------------------------------------------- | --------------------------------------------------- |
-| 代码     | 当前 `main` + 本次第6项修复                         | 最后已部署为 `e3c931a` 所在版本；不含本次修复       |
+| 代码     | 当前 `main` + 第6项修复 + 本地 Worker 接入          | 最后已部署为 `e3c931a`；不含这些本地更新            |
 | 数据库   | 本地 PostgreSQL，有开发和历史测试数据               | 独立 PostgreSQL，不会自动跟随本地改动               |
 | 摄像头流 | 通过本地 API 访问同一 WVP 流，可受公网/场馆网络影响 | WVP/GB28181 和生产 API 独立运行                     |
-| Worker   | 默认未必配置，页面应如实显示                        | 先前已以独立 Compose 项目部署，实际状态需发布前再查 |
+| Worker   | 已绑定“天天攀岩”，可通过本地脚本独立启停和检查心跳  | 已以独立 Compose 项目部署，不受本地 Worker 启停影响 |
 | 业务线路 | 本地开发数据                                        | 先前通过受控数据迁移/写入建立过 `W04-260901-001`    |
 
 `W04-260901-001` 不是前端写死的样例；它是生产数据库中的持久化线路及视觉定义。本地和生产显示同一编号不代表两个数据库自动同步。
@@ -79,23 +79,23 @@ POC 已从早期“岩点库 + 线路库”扩展为可运行的摄像头视觉�
 - 场馆公网 IPv4 曾从 `121.235.3.55` 变为 `121.235.8.140`；当时已手动收紧到新 `/32` 白名单并恢复 GB28181 注册和推流。
 - 以上是 2026-09-04 前后的最后已知结果，不是 2026-09-08 的实时运行承诺。下次部署前应重新验证 health、WVP 注册/流、媒体字节探测和 Worker 心跳。
 
-## 6. 重要：当前工作区另有未纳入基线的改动
+## 6. 重要：动态公网 IP 实验已隔离
 
-本次开始前，工作区已存在一组尚未提交的“摄像头动态公网 IP 自动白名单”实验改动，包括：
+此前工作区中的“摄像头动态公网 IP 自动白名单”实验改动已原样保存至本地分支 `feature/camera-dynamic-ip-allowlist-wip`，提交为 `40cbd14`，包括：
 
 - API 心跳接口、HMAC 认证、防重放与设备绑定。
 - Azure NSG 更新服务及数据库 migration。
 - Caddy 内部网关限制、生产 Compose 配置。
 - 岩馆侧 `camera-network-agent` 和安装脚本/文档。
 
-这组改动在本次全量 lint、typecheck、unit test 和 build 中未导致失败，但它们：
+这组改动不在当前 `main` 工作区中，且：
 
 1. 不属于本次第6项修复。
 2. 未经本次专项安全审查、数据库迁移验证和真实 Azure 端到端验证。
-3. 未纳入本文档所定义的稳定提交。
+3. 未合并到本文档所定义的稳定基线。
 4. 不得在下一窗口被当作已发布或已验收功能。
 
-下一窗口的第一步必须先运行 `git status --short`，将这组改动单独建分支/提交或在明确安全后放弃，不要与新功能混杂。
+后续若继续该功能，应从上述分支恢复并先做专项安全审查、migration 验证和真实 Azure 端到端验收；不要把它与其他功能发布混杂。
 
 ## 7. 关键实现位置
 
@@ -110,6 +110,7 @@ POC 已从早期“岩点库 + 线路库”扩展为可运行的摄像头视觉�
 | 截帧与最近成功回退        | `apps/api/src/camera/camera-snapshot.service.ts`             |
 | 视觉定义 API              | `apps/api/src/camera/camera-route-definition.service.ts`     |
 | 实时 Worker               | `services/vision-worker/live_stream_worker.py`               |
+| 本地 Worker 启动与检查    | `infra/run-local-vision-worker.sh` 等本地脚本                |
 | 摄像头/Worker 设计文档    | `docs/摄像头实时视频与攀岩识别POC.md`                        |
 | 可重复生产部署            | `infra/deploy-production.sh`                                 |
 
@@ -119,6 +120,10 @@ POC 已从早期“岩点库 + 线路库”扩展为可运行的摄像头视觉�
 cd /Users/flacko/Documents/Codex/SummerIntern/poc
 pnpm services:status
 pnpm dev
+# 另一个终端
+pnpm worker:dev
+# 随时检查心跳
+pnpm worker:status
 ```
 
 常用入口：
@@ -133,9 +138,11 @@ pnpm dev
 
 - `pnpm lint`：通过。
 - `pnpm typecheck`：通过。
-- `pnpm test`：通过；API 131 项、Web 33 项，共 164 项单元测试通过；8 项显式数据库集成测试按默认策略跳过。
+- `pnpm test`：通过；当前 `main` 为 API 119 项、Web 33 项，共 152 项单元测试通过；8 项显式数据库集成测试按默认策略跳过。
+- `pnpm worker:test`：8 项 Worker 测试通过。
 - `pnpm build`：API 和 Web 生产构建通过。
-- 本次未运行数据库 migration，未运行 Azure 或 WVP 外部健康检查。
+- 本地 Worker 成功读取 WVP H.264 3840×2160、15 FPS 实时流，并从本地 API 读取 2 条已发布线路定义；心跳为 `ONLINE`。
+- 本次未运行数据库 migration，未部署或修改 Azure。
 
 在提交或部署新功能前，至少执行：
 
@@ -143,6 +150,7 @@ pnpm dev
 pnpm lint
 pnpm typecheck
 pnpm test
+pnpm worker:test
 pnpm build
 pnpm --filter @climbing-crm/api db:check
 pnpm --filter @climbing-crm/api exec prisma migrate status
@@ -151,14 +159,15 @@ pnpm --filter @climbing-crm/api exec prisma migrate status
 ## 9. 新窗口的开始顺序
 
 1. 先读完本文档和 `docs/摄像头实时视频与攀岩识别POC.md`。
-2. 运行 `git status --short` 和 `git log --oneline -10`，不要覆盖第6节的未提交工作。
+2. 运行 `git status --short` 和 `git log --oneline -10`；动态公网 IP 实验只存在于第6节所列独立分支。
 3. 用本地测试账号确认线路库和反馈复盘页不再显示已删除线路。
 4. 在新目标明确前不修改 Azure；任何部署都要单独授权，并先备份、预检 migration、再执行服务和媒体健康检查。
 5. 若下一阶段要继续做 Worker，先保存真实观察数据和失败样本，再调整阈值；不把演示数据写进业务页面。
 
 ## 10. 开发与安全纪律
 
-- 本地开发验收后再合并/上线；不直接在生产服务器上开发。
+- 默认只在短生命周期 feature/fix 分支开发，验收后合并本地 `main`；不直接在生产服务器上开发。
+- 合并本地 `main` 不代表自动发布。只有用户明确要求“上线新版本”时，才汇总待发布提交并同步 Azure；多个小功能可以累计后一次发布。
 - 不覆盖未知来源的工作区改动，不将无关功能混入基线提交。
 - 未经明确授权，不推远程、不部署、不运行云端 migration、不修改 NSG 或 WVP。
 - `.env`、`.env.production`、密码、Token、对象存储密钥、SSH 私钥和数据库备份不得提交。
