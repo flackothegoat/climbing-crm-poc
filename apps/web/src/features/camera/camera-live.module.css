@@ -101,112 +101,11 @@
 
 .playerCard,
 .inspector,
-.message,
-.observations {
+.message {
   border: 1px solid var(--dashboard-line);
   border-radius: 18px;
   background: var(--dashboard-panel);
   box-shadow: var(--dashboard-shadow);
-}
-
-.observations {
-  overflow: hidden;
-}
-
-.observations > header {
-  display: flex;
-  align-items: flex-end;
-  justify-content: space-between;
-  gap: 24px;
-  padding: 20px 24px;
-  border-bottom: 1px solid var(--dashboard-line);
-}
-
-.observations header small,
-.observations header h3,
-.observations header p {
-  margin: 0;
-}
-
-.observations header small {
-  color: var(--dashboard-green);
-  font-size: 10px;
-  font-weight: 900;
-  letter-spacing: 0.16em;
-}
-
-.observations header h3 {
-  margin-top: 5px;
-  font-size: 17px;
-}
-
-.observations header p {
-  color: var(--dashboard-muted);
-  font-size: 12px;
-}
-
-.observationTableWrap {
-  overflow-x: auto;
-}
-
-.observations table {
-  width: 100%;
-  border-collapse: collapse;
-}
-
-.observations th,
-.observations td {
-  padding: 14px 24px;
-  border-bottom: 1px solid var(--dashboard-line);
-  text-align: left;
-  white-space: nowrap;
-}
-
-.observations th {
-  color: var(--dashboard-muted);
-  font-size: 11px;
-  font-weight: 800;
-}
-
-.observations td {
-  font-size: 12px;
-}
-
-.observations td strong,
-.observations td small {
-  display: block;
-}
-
-.observations td small {
-  margin-top: 2px;
-  color: var(--dashboard-muted);
-}
-
-.outcome {
-  display: inline-flex;
-  padding: 5px 9px;
-  border-radius: 999px;
-  color: #7c5525;
-  background: #f5eee1;
-  font-weight: 800;
-}
-
-.outcome[data-outcome='completed'] {
-  color: #1c5a42;
-  background: #e7f0e9;
-}
-
-.observationEmpty {
-  display: grid;
-  justify-items: center;
-  padding: 42px 24px;
-  text-align: center;
-}
-
-.observationEmpty p {
-  margin: 7px 0 0;
-  color: var(--dashboard-muted);
-  font-size: 12px;
 }
 
 .playerCard {

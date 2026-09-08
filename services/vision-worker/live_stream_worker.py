@@ -1,10 +1,13 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
 import queue
+import shutil
 import signal
+import subprocess
 import threading
 import time
 import urllib.error
@@ -18,6 +21,7 @@ from typing import Any
 from urllib.parse import urlsplit, urlunsplit
 
 import cv2
+import requests
 from ultralytics import YOLO
 
 from analyze_climb_video import (
@@ -134,7 +138,7 @@ class AttemptRecorder:
     def _start(self, monotonic_s: float, observed_at: datetime) -> None:
         timestamp = observed_at.astimezone(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
         self.attempt_id = f"live-{timestamp}-{uuid.uuid4().hex[:8]}"
-        clips_path = self.output_path / "clips"
+        clips_path = self.output_path / "temporary-clips"
         clips_path.mkdir(parents=True, exist_ok=True)
         self.video_path = clips_path / f"{self.attempt_id}.mp4"
         self.writer = cv2.VideoWriter(
@@ -207,7 +211,7 @@ def parse_args() -> WorkerSettings:
     parser.add_argument("--pre-roll-s", type=float, default=3.0)
     parser.add_argument("--absent-finish-s", type=float, default=3.0)
     parser.add_argument("--min-attempt-s", type=float, default=4.0)
-    parser.add_argument("--max-attempt-s", type=float, default=90.0)
+    parser.add_argument("--max-attempt-s", type=float, default=600.0)
     parser.add_argument("--imgsz", type=int, default=640)
     parser.add_argument("--api-url", default=os.getenv("CAMERA_WORKER_API_URL"))
     parser.add_argument("--worker-token", default=os.getenv("CAMERA_WORKER_TOKEN"))
@@ -231,6 +235,8 @@ def parse_args() -> WorkerSettings:
         parser.error("--stream-url or CAMERA_HTTP_FLV_URL/CAMERA_RESOURCE_URL is required")
     if values.record_fps <= 0 or values.detection_fps <= 0:
         parser.error("record and detection FPS must be positive")
+    if values.max_attempt_s <= values.min_attempt_s or values.max_attempt_s > 600:
+        parser.error("max attempt duration must be above the minimum and at most 600 seconds")
     if values.api_url and not values.worker_token:
         parser.error("API submission requires a worker token")
     if bool(values.route_id) != bool(values.route_version_id):
@@ -328,6 +334,7 @@ def main() -> None:
     resolution = calibration.get("analysis_resolution", [640, 360])
     target_size = (int(resolution[0]), int(resolution[1]))
     settings.output_path.mkdir(parents=True, exist_ok=True)
+    prune_stale_worker_files(settings.output_path)
 
     if settings.probe_seconds > 0:
         probe_stream(settings.stream_url, target_size, settings.probe_seconds)
@@ -509,6 +516,7 @@ def consume_stream(
     last_recorded = 0.0
     last_detection = 0.0
     last_status = 0.0
+    last_prune = 0.0
     reference_idle_since: float | None = None
     reference_path = settings.output_path / "live-reference.jpg"
     climber_present = False
@@ -570,6 +578,9 @@ def consume_stream(
                     route_definition_count=route_definitions.count,
                 )
                 last_status = now
+            if now - last_prune >= 5 * 60:
+                prune_stale_worker_files(settings.output_path)
+                last_prune = now
     finally:
         capture.release()
     return completed
@@ -645,6 +656,14 @@ def analyze_job(
         (output / "observation-response.json").write_text(
             json.dumps(response, ensure_ascii=False, indent=2), encoding="utf-8"
         )
+        upload_observation_evidence(
+            settings.api_url,
+            settings.worker_token,
+            response["id"],
+            job,
+        )
+        job.video_path.unlink(missing_ok=True)
+        remove_rendered_videos(output)
     print(
         f"completed {job.attempt_id}: {analysis['outcome']} "
         f"confidence={analysis['confidence']}",
@@ -694,6 +713,7 @@ def analyze_multi_route_job(
         (candidate_output / "summary.json").write_text(
             json.dumps(result, ensure_ascii=False, indent=2), encoding="utf-8"
         )
+        (candidate_output / "annotated.mp4").unlink(missing_ok=True)
         if result["result"]["started_at_s"] is None:
             continue
         score = float(result["result"].get("route_contact_ratio", 0)) + float(
@@ -702,14 +722,7 @@ def analyze_multi_route_job(
         candidates.append((score, definition, result, analysis))
 
     if not candidates:
-        payload = {
-            "attemptId": job.attempt_id,
-            "status": "UNASSIGNED",
-            "reason": "没有任何已配置线路确认双手起步",
-        }
-        (output / "unassigned.json").write_text(
-            json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8"
-        )
+        discard_unassigned_attempt(job, output)
         print(f"unassigned {job.attempt_id}: no configured route start", flush=True)
         return
 
@@ -733,6 +746,14 @@ def analyze_multi_route_job(
         (output / "observation-response.json").write_text(
             json.dumps(response, ensure_ascii=False, indent=2), encoding="utf-8"
         )
+        upload_observation_evidence(
+            settings.api_url,
+            settings.worker_token,
+            response["id"],
+            job,
+        )
+        job.video_path.unlink(missing_ok=True)
+        remove_rendered_videos(output)
     print(
         f"completed {job.attempt_id}: route={definition['route']['code']} "
         f"outcome={analysis['outcome']} confidence={analysis['confidence']}",
@@ -876,6 +897,103 @@ def post_observation(api_url: str, worker_token: str, payload: dict[str, Any]) -
     except urllib.error.HTTPError as error:
         detail = error.read().decode("utf-8", errors="replace")
         raise RuntimeError(f"观察写入失败 HTTP {error.code}: {detail}") from error
+
+
+def upload_observation_evidence(
+    api_url: str,
+    worker_token: str,
+    observation_id: str,
+    job: ClipJob,
+) -> dict[str, Any]:
+    evidence_path = transcode_evidence_video(job.video_path)
+    size_bytes = evidence_path.stat().st_size
+    checksum = file_sha256(evidence_path)
+    endpoint = (
+        f"{api_url.rstrip('/')}/camera/worker/observations/{observation_id}/evidence"
+    )
+    try:
+        with evidence_path.open("rb") as video:
+            response = requests.put(
+                endpoint,
+                data=video,
+                headers={
+                    "content-type": "video/mp4",
+                    "content-length": str(size_bytes),
+                    "x-camera-worker-token": worker_token,
+                    "x-video-duration-ms": str(round(job.duration_s * 1000)),
+                    "x-video-sha256": checksum,
+                },
+                timeout=(10, 120),
+            )
+    finally:
+        evidence_path.unlink(missing_ok=True)
+    if not response.ok:
+        raise RuntimeError(
+            f"识别录像上传失败 HTTP {response.status_code}: {response.text[:500]}"
+        )
+    return dict(response.json())
+
+
+def transcode_evidence_video(source: Path) -> Path:
+    target = source.with_name(f"{source.stem}.evidence.mp4")
+    command = [
+        "ffmpeg",
+        "-y",
+        "-loglevel",
+        "error",
+        "-i",
+        str(source),
+        "-an",
+        "-c:v",
+        "libx264",
+        "-preset",
+        "veryfast",
+        "-crf",
+        "29",
+        "-pix_fmt",
+        "yuv420p",
+        "-movflags",
+        "+faststart",
+        str(target),
+    ]
+    try:
+        subprocess.run(command, check=True, timeout=300)
+    except Exception:
+        target.unlink(missing_ok=True)
+        raise
+    return target
+
+
+def file_sha256(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as source:
+        for chunk in iter(lambda: source.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def discard_unassigned_attempt(job: ClipJob, output: Path) -> None:
+    job.video_path.unlink(missing_ok=True)
+    shutil.rmtree(output, ignore_errors=True)
+
+
+def remove_rendered_videos(output: Path) -> None:
+    for video in output.rglob("*.mp4"):
+        video.unlink(missing_ok=True)
+
+
+def prune_stale_worker_files(output_path: Path, max_age_s: float = 24 * 60 * 60) -> None:
+    cutoff = time.time() - max_age_s
+    temporary_clips = output_path / "temporary-clips"
+    if temporary_clips.exists():
+        for clip in temporary_clips.glob("*.mp4"):
+            if clip.stat().st_mtime < cutoff:
+                clip.unlink(missing_ok=True)
+    attempts = output_path / "attempts"
+    if attempts.exists():
+        for attempt in attempts.iterdir():
+            if attempt.is_dir() and attempt.stat().st_mtime < cutoff:
+                shutil.rmtree(attempt, ignore_errors=True)
 
 
 def report_status(

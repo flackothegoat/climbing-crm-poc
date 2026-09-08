@@ -9,7 +9,7 @@ import { resolve } from 'node:path';
 import { AppModule } from './app.module';
 import { AppConfigService } from './config/app-config.service';
 
-export const CORS_ALLOWED_METHODS = ['GET', 'HEAD', 'POST', 'PATCH', 'DELETE', 'OPTIONS'];
+export const CORS_ALLOWED_METHODS = ['GET', 'HEAD', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'];
 
 loadDotenv({ path: resolve(process.cwd(), '../../.env') });
 loadDotenv({ path: resolve(process.cwd(), '.env') });
@@ -19,6 +19,10 @@ export async function createApplication(): Promise<NestFastifyApplication> {
   const env = app.get(AppConfigService).values;
   await app.register(cookie);
   await app.register(multipart, { limits: { files: 1, fileSize: 20 * 1024 * 1024 } });
+  app
+    .getHttpAdapter()
+    .getInstance()
+    .addContentTypeParser('video/mp4', (_request, payload, done) => done(null, payload));
   app.enableCors({
     origin: env.WEB_ORIGIN,
     credentials: true,

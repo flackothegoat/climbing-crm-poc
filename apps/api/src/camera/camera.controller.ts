@@ -1,10 +1,28 @@
-import { Body, Controller, Get, Post, Put, Query, Res, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  Headers,
+  Param,
+  Post,
+  Put,
+  Query,
+  Res,
+  StreamableFile,
+  UseGuards,
+} from '@nestjs/common';
 import { ApiCookieAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import type { FastifyReply } from 'fastify';
 import { CurrentSessionContext } from '../auth/current-session.decorator';
 import { SessionGuard } from '../auth/session.guard';
 import type { CurrentSession } from '../auth/session.service';
-import { parseCameraObservation, parseListCameraObservations } from './camera-observation.dto';
+import {
+  parseCameraObservation,
+  parseCameraObservationId,
+  parseListCameraObservations,
+  parseReviewCameraObservation,
+} from './camera-observation.dto';
+import { CameraObservationEvidenceService } from './camera-observation-evidence.service';
 import { CameraObservationService } from './camera-observation.service';
 import { parseSaveCameraRouteDefinition } from './camera-route-definition.dto';
 import { CameraRouteDefinitionService } from './camera-route-definition.service';
@@ -20,6 +38,7 @@ export class CameraController {
   constructor(
     private readonly camera: CameraService,
     private readonly observations: CameraObservationService,
+    private readonly evidence: CameraObservationEvidenceService,
     private readonly routeDefinitions: CameraRouteDefinitionService,
     private readonly snapshots: CameraSnapshotService,
     private readonly workerStatus: CameraWorkerStatusService,
@@ -65,6 +84,54 @@ export class CameraController {
   @ApiOperation({ summary: '读取视觉 Worker 最近提交的真实攀爬观察' })
   listObservations(@CurrentSessionContext() session: CurrentSession, @Query() query: unknown) {
     return this.observations.list(session, parseListCameraObservations(query));
+  }
+
+  @Get('observations/:observationId')
+  @ApiOperation({ summary: '读取单次识别的算法事件、复核结论和录像状态' })
+  getObservation(
+    @CurrentSessionContext() session: CurrentSession,
+    @Param('observationId') observationId: unknown,
+  ) {
+    return this.observations.get(session, parseCameraObservationId(observationId));
+  }
+
+  @Get('observations/:observationId/evidence')
+  @ApiOperation({ summary: '按权限和 HTTP Range 播放尚未过期的识别录像' })
+  async getObservationEvidence(
+    @CurrentSessionContext() session: CurrentSession,
+    @Param('observationId') observationId: unknown,
+    @Headers('range') range: string | undefined,
+    @Res({ passthrough: true }) reply: FastifyReply,
+  ) {
+    const result = await this.evidence.get(session, parseCameraObservationId(observationId), range);
+    reply.header('Accept-Ranges', 'bytes').header('Cache-Control', 'private, no-store');
+    if (result.range) {
+      reply
+        .code(206)
+        .header(
+          'Content-Range',
+          `bytes ${result.range.start}-${result.range.end}/${result.evidence.sizeBytes}`,
+        );
+    }
+    return new StreamableFile(result.stream, {
+      type: result.evidence.contentType,
+      length: result.range?.length ?? result.evidence.sizeBytes,
+      disposition: 'inline',
+    });
+  }
+
+  @Post('observations/:observationId/reviews')
+  @ApiOperation({ summary: '追加人工复核结论，保留原始算法判定' })
+  reviewObservation(
+    @CurrentSessionContext() session: CurrentSession,
+    @Param('observationId') observationId: unknown,
+    @Body() body: unknown,
+  ) {
+    return this.observations.review(
+      session,
+      parseCameraObservationId(observationId),
+      parseReviewCameraObservation(body),
+    );
   }
 
   @Post('observations')

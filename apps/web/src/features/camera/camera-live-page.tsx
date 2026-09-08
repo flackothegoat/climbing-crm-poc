@@ -2,13 +2,12 @@
 
 import { useEffect, useState } from 'react';
 import {
-  getCameraObservations,
   getCameraLiveConfiguration,
   getCameraWorkerStatus,
-  type CameraObservation,
   type CameraLiveConfiguration,
   type CameraWorkerStatus,
 } from './camera-live-api';
+import { CameraObservationPanel } from './camera-observation-panel';
 import { CameraRouteConfigurator } from './camera-route-configurator';
 import styles from './camera-live.module.css';
 
@@ -19,14 +18,12 @@ export function CameraLivePage() {
   const [message, setMessage] = useState('');
   const [playerState, setPlayerState] = useState<PlayerState>('LOADING');
   const [playerKey, setPlayerKey] = useState(0);
-  const [observations, setObservations] = useState<CameraObservation[]>([]);
   const [workerStatus, setWorkerStatus] = useState<CameraWorkerStatus | null>(null);
 
   useEffect(() => {
-    Promise.all([getCameraLiveConfiguration(), getCameraObservations(), getCameraWorkerStatus()])
-      .then(([camera, recent, worker]) => {
+    Promise.all([getCameraLiveConfiguration(), getCameraWorkerStatus()])
+      .then(([camera, worker]) => {
         setConfiguration(camera);
-        setObservations(recent.items);
         setWorkerStatus(worker);
       })
       .catch((error: unknown) =>
@@ -141,67 +138,8 @@ export function CameraLivePage() {
         </aside>
       </section>
       <CameraRouteConfigurator />
-      <ObservationList observations={observations} />
+      <CameraObservationPanel />
     </div>
-  );
-}
-
-function ObservationList({ observations }: { observations: CameraObservation[] }) {
-  return (
-    <section className={styles.observations}>
-      <header>
-        <div>
-          <small>VISION EVENTS</small>
-          <h3>最近识别结果</h3>
-        </div>
-        <p>这里只展示视觉 Worker 实际写入的事件，不生成模拟结果。</p>
-      </header>
-      {observations.length ? (
-        <div className={styles.observationTableWrap}>
-          <table>
-            <thead>
-              <tr>
-                <th>时间</th>
-                <th>线路</th>
-                <th>结果</th>
-                <th>置信度</th>
-                <th>复核</th>
-              </tr>
-            </thead>
-            <tbody>
-              {observations.map((observation) => (
-                <tr key={observation.id}>
-                  <td>{new Date(observation.observedAt).toLocaleString('zh-CN')}</td>
-                  <td>
-                    <strong>{observation.route.code}</strong>
-                    <small>{observation.route.name}</small>
-                  </td>
-                  <td>
-                    <span
-                      className={styles.outcome}
-                      data-outcome={observation.outcome.toLowerCase()}
-                    >
-                      {outcomeLabel(observation.outcome)}
-                    </span>
-                  </td>
-                  <td>
-                    {typeof observation.analysis?.confidence === 'number'
-                      ? `${Math.round(observation.analysis.confidence * 100)}%`
-                      : '—'}
-                  </td>
-                  <td>{observation.analysis?.requiresReview ? '需要' : '否'}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      ) : (
-        <div className={styles.observationEmpty}>
-          <strong>还没有真实识别事件</strong>
-          <p>Worker 在线后会监控全部已发布且已完成视觉定义的线路，并在真实尝试结束后写入结果。</p>
-        </div>
-      )}
-    </section>
   );
 }
 
@@ -219,13 +157,6 @@ function workerStatusDetail(status: CameraWorkerStatus | null) {
   return `${heartbeat.detail} · 监控 ${heartbeat.routeDefinitionCount} 条线路${attempt} · ${new Date(
     heartbeat.checkedAt,
   ).toLocaleString('zh-CN')}`;
-}
-
-function outcomeLabel(outcome: CameraObservation['outcome']) {
-  if (outcome === 'COMPLETED') return '完攀';
-  if (outcome === 'FAILED') return '失败';
-  if (outcome === 'ABANDONED') return '放弃';
-  return '不确定';
 }
 
 function CameraMessage({ title, detail }: { title: string; detail: string }) {

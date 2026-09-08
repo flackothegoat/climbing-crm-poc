@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { AuthModule } from '../auth/auth.module';
 import { CameraController } from './camera.controller';
+import { CameraObservationEvidenceService } from './camera-observation-evidence.service';
 import { CameraObservationService } from './camera-observation.service';
 import { CameraRouteDefinitionService } from './camera-route-definition.service';
 import { CameraService } from './camera.service';
@@ -16,6 +17,7 @@ import { CameraWorkerStatusService } from './camera-worker-status.service';
     CameraService,
     CameraSnapshotService,
     CameraObservationService,
+    CameraObservationEvidenceService,
     CameraRouteDefinitionService,
     CameraWorkerGuard,
     CameraWorkerStatusService,

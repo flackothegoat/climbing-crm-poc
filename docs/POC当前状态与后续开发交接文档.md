@@ -6,13 +6,13 @@
 >
 > 当前分支：`main`
 >
-> 稳定基线：本文档所在提交，包含“反馈与复盘隐藏已删除线路”和本地 Vision Worker 接入
+> 稳定基线：本文档所在提交，包含本地 Vision Worker、识别历史、录像证据和人工复核闭环
 >
 > 部署边界：本次只修改本地代码，**未部署 Azure，未修改云端数据库、WVP、NSG 或 Worker**
 
 ## 1. 一句话状态
 
-POC 已从早期“岩点库 + 线路库”扩展为可运行的摄像头视觉闭环：用户通过 SlimSAM 逐块标注线路岩点和起终点，视觉定义与线路版本绑定，实时 Worker 按 API 下发的已发布定义监控并回写真实观察。生产与本地 Worker 相互独立；本地现可连接同一实时流并只向本地 API、PostgreSQL 写入心跳和真实观察。线路库支持正常、已停用和语义删除，历史数据不物理删除。
+POC 已从早期“岩点库 + 线路库”扩展为可运行、可追溯的摄像头视觉闭环：用户通过 SlimSAM 标注线路，实时 Worker 只监控 API 下发的已发布定义，回写真实观察并为有效线路上传短期录像证据；员工可以查询全部历史、查看算法事件并追加人工复核结论。生产与本地 Worker 相互独立，本地更新不会自动进入 Azure。
 
 ## 2. 产品主线
 
@@ -39,6 +39,18 @@ POC 已从早期“岩点库 + 线路库”扩展为可运行的摄像头视觉�
 - 再次点击已有轮廓可取消或恢复选择；颜色连通域候选、拆分和合并收纳在“高级修正”。
 - Worker 不按颜色或线路名称猜测业务 ID；它通过受保护 API 读取已发布视觉定义，再幂等回写观察。
 - Worker 是规则型 POC，当前目标是可解释的粗略识别，不是经过大规模标注数据训练的完美模型。
+- 未匹配任何有效线路起步的候选录像和分析目录立即删除，不写业务记录、不上传对象存储。
+- 有效识别录像转为无音频 H.264 后流式上传；上传成功即删除 Worker 原片，异常残留最多保留 24 小时。
+
+### 2.4 识别历史与人工复核
+
+- 摄像头首页明确显示最近 10 条，完整历史使用服务端游标分页。
+- 支持线路编号/名称、算法结果、复核状态和日期范围筛选。
+- 页面区分算法原判、规则型算法评分、人工最终结论和复核状态；不把评分描述为统计正确概率。
+- 复核采用不可变追加记录，可以确认原判、改判完攀、改判失败或标记无效；改判和无效必须填写原因。
+- 录像通过登录权限和 HTTP Range 播放，不保存到 PostgreSQL，也不提供永久公开地址。
+- 普通录像保留 72 小时，待复核 14 天，确认/无效后 72 小时，改判后 30 天；结构化历史永久保留。
+- 完整技术边界见 `docs/摄像头识别历史与人工复核设计.md`。
 
 ## 3. 本次第6项修复
 
@@ -63,7 +75,7 @@ POC 已从早期“岩点库 + 线路库”扩展为可运行的摄像头视觉�
 
 | 项目     | 本地                                                | Azure 生产                                          |
 | -------- | --------------------------------------------------- | --------------------------------------------------- |
-| 代码     | 当前 `main` + 第6项修复 + 本地 Worker 接入          | 最后已部署为 `e3c931a`；不含这些本地更新            |
+| 代码     | 当前 `main` + 本地 Worker + 识别历史和复核闭环      | 最后已部署为 `e3c931a`；不含这些本地更新            |
 | 数据库   | 本地 PostgreSQL，有开发和历史测试数据               | 独立 PostgreSQL，不会自动跟随本地改动               |
 | 摄像头流 | 通过本地 API 访问同一 WVP 流，可受公网/场馆网络影响 | WVP/GB28181 和生产 API 独立运行                     |
 | Worker   | 已绑定“天天攀岩”，可通过本地脚本独立启停和检查心跳  | 已以独立 Compose 项目部署，不受本地 Worker 启停影响 |
@@ -110,6 +122,9 @@ POC 已从早期“岩点库 + 线路库”扩展为可运行的摄像头视觉�
 | 截帧与最近成功回退        | `apps/api/src/camera/camera-snapshot.service.ts`             |
 | 视觉定义 API              | `apps/api/src/camera/camera-route-definition.service.ts`     |
 | 实时 Worker               | `services/vision-worker/live_stream_worker.py`               |
+| 识别历史与复核前端        | `apps/web/src/features/camera/camera-observation-panel.tsx`  |
+| 识别历史与复核 API        | `apps/api/src/camera/camera-observation.service.ts`          |
+| 录像证据与过期            | `apps/api/src/camera/camera-observation-evidence.service.ts` |
 | 本地 Worker 启动与检查    | `infra/run-local-vision-worker.sh` 等本地脚本                |
 | 摄像头/Worker 设计文档    | `docs/摄像头实时视频与攀岩识别POC.md`                        |
 | 可重复生产部署            | `infra/deploy-production.sh`                                 |
@@ -138,11 +153,13 @@ pnpm worker:status
 
 - `pnpm lint`：通过。
 - `pnpm typecheck`：通过。
-- `pnpm test`：通过；当前 `main` 为 API 119 项、Web 33 项，共 152 项单元测试通过；8 项显式数据库集成测试按默认策略跳过。
-- `pnpm worker:test`：8 项 Worker 测试通过。
+- `pnpm test`：通过；当前 `main` 为 API 126 项、Web 33 项，共 159 项单元测试通过；8 项显式数据库集成测试按默认策略跳过。
+- `pnpm worker:test`：11 项 Worker 测试通过。
 - `pnpm build`：API 和 Web 生产构建通过。
+- 本地 migration 已应用至 `20260908170000_camera_observation_evidence_constraints`，数据库不变量全部为 0。
+- 本地页面已验证“最近10条”“查看全部”和筛选界面可正常加载。
 - 本地 Worker 成功读取 WVP H.264 3840×2160、15 FPS 实时流，并从本地 API 读取 2 条已发布线路定义；心跳为 `ONLINE`。
-- 本次未运行数据库 migration，未部署或修改 Azure。
+- 本次未部署或修改 Azure；云端数据库尚未应用识别复核与录像证据 migration。
 
 在提交或部署新功能前，至少执行：
 
