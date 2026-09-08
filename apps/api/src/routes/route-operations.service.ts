@@ -480,7 +480,7 @@ export class RouteOperationsService {
     const routes = await this.prisma.route.findMany({
       where: {
         organizationId: session.organization.id,
-        status: { in: [RouteStatus.PUBLISHED, RouteStatus.INACTIVE, RouteStatus.REMOVED] },
+        status: { in: [RouteStatus.PUBLISHED, RouteStatus.INACTIVE] },
         versions: input.wallSegmentId
           ? { some: { wallSegments: { some: { wallSegmentId: input.wallSegmentId } } } }
           : undefined,

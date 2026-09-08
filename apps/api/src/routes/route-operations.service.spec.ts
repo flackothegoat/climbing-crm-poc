@@ -44,6 +44,28 @@ describe('RouteOperationsService 第一阶段线路建档', () => {
     );
   });
 
+  it('反馈与复盘只统计语义上仍存在的线路', async () => {
+    const prisma = {
+      route: { findMany: vi.fn().mockResolvedValue([]) },
+    } as unknown as PrismaService;
+    const service = new RouteOperationsService(
+      prisma,
+      {} as AuditService,
+      new AccessControlService(),
+      {} as TokenService,
+    );
+
+    await service.analytics(session, {});
+
+    expect(prisma.route.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          status: { in: [RouteStatus.PUBLISHED, RouteStatus.INACTIVE] },
+        }),
+      }),
+    );
+  });
+
   it('创建线路时只写墙段关系，不要求几何版本或岩点位置', async () => {
     const transaction = {
       $executeRaw: vi.fn().mockResolvedValue(1),
