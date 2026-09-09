@@ -12,7 +12,11 @@ import cv2
 import numpy as np
 from ultralytics import YOLO
 
+from attempt_gate import AttemptGate, AttemptGateConfig, AttemptSignal
 
+
+LEFT_SHOULDER = 5
+RIGHT_SHOULDER = 6
 LEFT_ELBOW = 7
 RIGHT_ELBOW = 8
 LEFT_WRIST = 9
@@ -173,6 +177,22 @@ def analyze(
     finish_zones = [Rect.from_list(item["rect"]) for item in finish_items]
     visibility_threshold = float(calibration["pose_visibility_threshold"])
     start_dwell = float(calibration["start_dwell_seconds"])
+    start_confirmation_window = float(
+        calibration.get("start_confirmation_window_seconds", 5.0)
+    )
+    start_min_hip_rise = float(
+        calibration.get("start_min_hip_rise_normalized", 0.055)
+    )
+    start_progress_gap = float(
+        calibration.get("start_progress_min_vertical_gap_normalized", 0.04)
+    )
+    track_loss_tolerance = float(
+        calibration.get("track_loss_tolerance_seconds", 0.5)
+    )
+    track_min_iou = float(calibration.get("track_min_iou", 0.1))
+    track_max_center_distance = float(
+        calibration.get("track_max_center_distance_normalized", 0.12)
+    )
     finish_dwell = float(calibration["finish_dwell_seconds"])
     finish_hand_tolerance = float(calibration["finish_hand_tolerance_seconds"])
     contact_dwell = float(calibration["contact_dwell_seconds"])
@@ -184,13 +204,38 @@ def analyze(
     fall_min_drop = float(calibration["fall_min_drop_normalized"])
     fall_min_hip_y = float(calibration["fall_min_hip_y"])
 
-    state = "WAITING_FOR_START"
+    start_hold_ids = {str(hold["id"]) for hold in calibration.get("start_holds", [])}
+    start_anchor_y = max(
+        ((zone.y1 + zone.y2) / 2 for zone in start_zones),
+        default=1.0,
+    )
+    progress_holds = [
+        hold
+        for hold in calibration.get("route_holds", [])
+        if str(hold["id"]) not in start_hold_ids
+        and float(hold["y"]) <= start_anchor_y - start_progress_gap
+    ]
+    progress_hold_distance = landmark_distance(reference, progress_holds)
+    progress_distance = (
+        progress_hold_distance
+        if progress_hold_distance is not None
+        else route_distance
+    )
+
+    start_gate = AttemptGate(
+        AttemptGateConfig(
+            start_dwell_s=start_dwell,
+            confirmation_window_s=start_confirmation_window,
+            min_hip_rise=start_min_hip_rise,
+            track_loss_tolerance_s=track_loss_tolerance,
+        )
+    )
+    state = start_gate.state
     events: list[dict[str, Any]] = []
     records: list[dict[str, Any]] = []
     contact_candidates = {limb: ContactCandidate() for limb in LIMBS}
     last_finish_hit = {LEFT_WRIST: None, RIGHT_WRIST: None}
     hip_history: deque[tuple[float, float]] = deque()
-    start_candidate_at: float | None = None
     finish_candidate_at: float | None = None
     started_at_s: float | None = None
     finished_at_s: float | None = None
@@ -201,6 +246,7 @@ def analyze(
     limb_samples = 0
     route_contact_samples = 0
     off_route_samples = 0
+    tracked_box: tuple[float, float, float, float] | None = None
     started_clock = time.perf_counter()
 
     while True:
@@ -217,8 +263,25 @@ def analyze(
         last_sample_at = timestamp_s
         processed_frames += 1
 
-        prediction = model.predict(frame, imgsz=imgsz, conf=0.12, device="cpu", verbose=False)[0]
-        person_index = select_climber(prediction, climber_roi, width, height)
+        prediction = model.predict(
+            frame, imgsz=imgsz, conf=0.12, device="cpu", verbose=False
+        )[0]
+        person_index = select_climber(
+            prediction,
+            climber_roi,
+            width,
+            height,
+            tracked_box=tracked_box
+            if start_gate.engaged or state != "WAITING_FOR_START"
+            else None,
+            start_landmark_distance=start_hold_distance,
+            start_zones=start_zones,
+            visibility_threshold=visibility_threshold,
+            contact_radius=contact_radius,
+            track_min_iou=track_min_iou,
+            track_max_center_distance=track_max_center_distance,
+            minimum_start_hits=2,
+        )
         record: dict[str, Any] = {
             "timestamp_s": round(timestamp_s, 3),
             "pose_detected": person_index is not None,
@@ -227,12 +290,25 @@ def analyze(
         limb_points: dict[str, tuple[int, int]] = {}
         limb_contacts: dict[str, str] = {}
 
-        if person_index is not None:
+        if person_index is None:
+            if state in {"WAITING_FOR_START", "START_CANDIDATE"}:
+                decision = start_gate.update(
+                    AttemptSignal(timestamp_s=timestamp_s, track_present=False)
+                )
+                state = decision.state
+                if decision.reset_now:
+                    tracked_box = None
+        else:
             detected_frames += 1
+            tracked_box = normalized_prediction_box(
+                prediction, person_index, width, height
+            )
             xy = prediction.keypoints.xy[person_index].cpu().numpy()
             confidence = prediction.keypoints.conf[person_index].cpu().numpy()
             draw_pose(frame, xy, confidence, visibility_threshold)
-            limb_points = resolve_limb_points(xy, confidence, visibility_threshold, hand_extension)
+            limb_points = resolve_limb_points(
+                xy, confidence, visibility_threshold, hand_extension
+            )
             wrists_normalized = [
                 (float(xy[index][0] / width), float(xy[index][1] / height))
                 for index in (LEFT_WRIST, RIGHT_WRIST)
@@ -261,34 +337,13 @@ def analyze(
                     height,
                     contact_radius,
                 )
-                if current_finish_hits[index]:
+                if current_finish_hits[index] and state == "CLIMBING":
                     last_finish_hit[index] = timestamp_s
             both_hands_at_finish = all(
                 last_finish_hit[index] is not None
                 and timestamp_s - float(last_finish_hit[index]) <= finish_hand_tolerance
                 for index in (LEFT_WRIST, RIGHT_WRIST)
             ) and any(current_finish_hits.values())
-
-            if state == "WAITING_FOR_START":
-                start_candidate_at = update_dwell_candidate(
-                    start_candidate_at, both_hands_at_start, timestamp_s
-                )
-                if start_candidate_at is not None and timestamp_s - start_candidate_at >= start_dwell:
-                    started_at_s = start_candidate_at
-                    state = "CLIMBING"
-                    events.append(
-                        event("STARTED", started_at_s, "两只手腕持续位于用户确认的线路起点区域", 0.7)
-                    )
-            elif state == "CLIMBING":
-                finish_candidate_at = update_dwell_candidate(
-                    finish_candidate_at, both_hands_at_finish, timestamp_s
-                )
-                if finish_candidate_at is not None and timestamp_s - finish_candidate_at >= finish_dwell:
-                    finished_at_s = finish_candidate_at
-                    state = "FINISH_REACHED"
-                    events.append(
-                        event("FINISH_REACHED", finished_at_s, "两只手腕持续位于用户确认的线路终点区域", 0.72)
-                    )
 
             for limb, point in limb_points.items():
                 route_gap = sample_distance(route_distance, point)
@@ -304,6 +359,89 @@ def analyze(
                     route_contact_samples += 1
                 if contact == "OFF_ROUTE":
                     off_route_samples += 1
+
+            hip_y = mean_visible_y(
+                xy, confidence, (LEFT_HIP, RIGHT_HIP), visibility_threshold, height
+            )
+            torso_on_wall = pose_group_inside(
+                xy,
+                confidence,
+                (LEFT_SHOULDER, RIGHT_SHOULDER, LEFT_HIP, RIGHT_HIP),
+                visibility_threshold,
+                climber_roi,
+                width,
+                height,
+            )
+            foot_on_route = any(
+                limb_contacts.get(limb) == "ROUTE"
+                for limb in ("LEFT_FOOT", "RIGHT_FOOT")
+            )
+            progress_hold_reached = any(
+                confidence[index] >= visibility_threshold
+                and float(xy[index][1] / height)
+                <= start_anchor_y - start_progress_gap
+                and point_hits_landmark(
+                    (float(xy[index][0] / width), float(xy[index][1] / height)),
+                    progress_distance,
+                    [],
+                    width,
+                    height,
+                    contact_radius,
+                )
+                for index in (LEFT_WRIST, RIGHT_WRIST)
+            )
+
+            start_hip_rise = 0.0
+            if state in {"WAITING_FOR_START", "START_CANDIDATE"}:
+                decision = start_gate.update(
+                    AttemptSignal(
+                        timestamp_s=timestamp_s,
+                        track_present=True,
+                        both_hands_at_start=both_hands_at_start,
+                        torso_on_wall=torso_on_wall,
+                        hip_y=hip_y,
+                        foot_on_route=foot_on_route,
+                        progress_hold_reached=progress_hold_reached,
+                    )
+                )
+                state = decision.state
+                start_hip_rise = decision.hip_rise
+                if decision.reset_now:
+                    tracked_box = None
+                if decision.confirmed_now:
+                    started_at_s = decision.started_at_s
+                    assert started_at_s is not None
+                    events.append(
+                        event(
+                            "STARTED",
+                            started_at_s,
+                            "同一攀爬者完成起步停留，并出现脚点支撑、重心上升和后续岩点推进",
+                            start_evidence_score(
+                                confidence, visibility_threshold, decision.hip_rise
+                            ),
+                        )
+                    )
+
+            if state == "CLIMBING":
+                finish_candidate_at = update_dwell_candidate(
+                    finish_candidate_at, both_hands_at_finish, timestamp_s
+                )
+                if (
+                    finish_candidate_at is not None
+                    and timestamp_s - finish_candidate_at >= finish_dwell
+                ):
+                    finished_at_s = finish_candidate_at
+                    state = "FINISH_REACHED"
+                    events.append(
+                        event(
+                            "FINISH_REACHED",
+                            finished_at_s,
+                            "同一攀爬者持续控制线路终点",
+                            0.72,
+                        )
+                    )
+
+            for limb, contact in limb_contacts.items():
                 candidate = contact_candidates[limb]
                 active_climb = state in {"CLIMBING", "FINISH_REACHED"}
                 if active_climb and contact == "OFF_ROUTE":
@@ -325,35 +463,35 @@ def analyze(
                 else:
                     candidate.started_at_s = None
 
-            if state == "CLIMBING":
-                hip_y = mean_visible_y(
-                    xy, confidence, (LEFT_HIP, RIGHT_HIP), visibility_threshold, height
-                )
-                if hip_y is not None:
-                    hip_history.append((timestamp_s, hip_y))
-                    while hip_history and timestamp_s - hip_history[0][0] > fall_window:
-                        hip_history.popleft()
-                    if (
-                        len(hip_history) >= 2
-                        and hip_y >= fall_min_hip_y
-                        and hip_y - min(value for _, value in hip_history) >= fall_min_drop
-                    ):
-                        fall_at_s = timestamp_s
-                        state = "FALL_DETECTED"
-                        events.append(
-                            event(
-                                "FALL_BEFORE_FINISH",
-                                timestamp_s,
-                                "髋部在短时间内快速下移，且此前未确认双手终点",
-                                0.68,
-                            )
+            if state == "CLIMBING" and hip_y is not None:
+                hip_history.append((timestamp_s, hip_y))
+                while hip_history and timestamp_s - hip_history[0][0] > fall_window:
+                    hip_history.popleft()
+                if (
+                    len(hip_history) >= 2
+                    and hip_y >= fall_min_hip_y
+                    and hip_y - min(value for _, value in hip_history) >= fall_min_drop
+                ):
+                    fall_at_s = timestamp_s
+                    state = "FALL_DETECTED"
+                    events.append(
+                        event(
+                            "FALL_BEFORE_FINISH",
+                            timestamp_s,
+                            "已确认攀爬者的髋部快速下移，且此前未控制终点",
+                            0.68,
                         )
+                    )
 
             record.update(
                 {
                     "both_hands_at_start": both_hands_at_start,
                     "both_hands_at_finish": both_hands_at_finish,
                     "limb_contacts": limb_contacts,
+                    "torso_on_wall": torso_on_wall,
+                    "foot_on_route": foot_on_route,
+                    "progress_hold_reached": progress_hold_reached,
+                    "start_hip_rise": round(start_hip_rise, 4),
                 }
             )
 
@@ -681,19 +819,162 @@ def sample_distance(distance: np.ndarray, point: tuple[int, int]) -> float:
 
 
 def select_climber(
-    prediction: Any, roi: Rect, width: int, height: int
+    prediction: Any,
+    roi: Rect,
+    width: int,
+    height: int,
+    *,
+    tracked_box: tuple[float, float, float, float] | None = None,
+    start_landmark_distance: np.ndarray | None = None,
+    start_zones: list[Rect] | None = None,
+    visibility_threshold: float = 0.45,
+    contact_radius: float = 11,
+    track_min_iou: float = 0.1,
+    track_max_center_distance: float = 0.12,
+    minimum_start_hits: int = 0,
 ) -> int | None:
     if prediction.keypoints is None or len(prediction.keypoints.data) == 0:
         return None
     boxes = prediction.boxes.xyxy.cpu().numpy()
-    candidates: list[tuple[float, int]] = []
+    candidates: list[tuple[tuple[float, ...], int]] = []
     for index, box in enumerate(boxes):
         center = ((box[0] + box[2]) / (2 * width), (box[1] + box[3]) / (2 * height))
         if not roi.contains(center):
             continue
+        normalized_box = normalize_box(box, width, height)
+        if tracked_box is not None:
+            overlap = box_iou(normalized_box, tracked_box)
+            center_gap = box_center_distance(normalized_box, tracked_box)
+            if overlap < track_min_iou and center_gap > track_max_center_distance:
+                continue
+            candidates.append(((overlap, -center_gap), index))
+            continue
         area = float((box[2] - box[0]) * (box[3] - box[1]))
-        candidates.append((area, index))
+        start_hits = start_hit_count(
+            prediction,
+            index,
+            start_landmark_distance,
+            start_zones or [],
+            width,
+            height,
+            visibility_threshold,
+            contact_radius,
+        )
+        if start_hits < minimum_start_hits:
+            continue
+        candidates.append(((float(start_hits), area), index))
     return max(candidates)[1] if candidates else None
+
+
+def start_hit_count(
+    prediction: Any,
+    person_index: int,
+    start_landmark_distance: np.ndarray | None,
+    start_zones: list[Rect],
+    width: int,
+    height: int,
+    visibility_threshold: float,
+    contact_radius: float,
+) -> int:
+    if start_landmark_distance is None and not start_zones:
+        return 0
+    xy = prediction.keypoints.xy[person_index].cpu().numpy()
+    confidence = prediction.keypoints.conf[person_index].cpu().numpy()
+    return sum(
+        confidence[index] >= visibility_threshold
+        and point_hits_landmark(
+            (float(xy[index][0] / width), float(xy[index][1] / height)),
+            start_landmark_distance,
+            start_zones,
+            width,
+            height,
+            contact_radius,
+        )
+        for index in (LEFT_WRIST, RIGHT_WRIST)
+    )
+
+
+def normalized_prediction_box(
+    prediction: Any, person_index: int, width: int, height: int
+) -> tuple[float, float, float, float]:
+    box = prediction.boxes.xyxy.cpu().numpy()[person_index]
+    return normalize_box(box, width, height)
+
+
+def normalize_box(
+    box: np.ndarray, width: int, height: int
+) -> tuple[float, float, float, float]:
+    return (
+        float(box[0] / width),
+        float(box[1] / height),
+        float(box[2] / width),
+        float(box[3] / height),
+    )
+
+
+def box_iou(
+    first: tuple[float, float, float, float],
+    second: tuple[float, float, float, float],
+) -> float:
+    x1 = max(first[0], second[0])
+    y1 = max(first[1], second[1])
+    x2 = min(first[2], second[2])
+    y2 = min(first[3], second[3])
+    intersection = max(0.0, x2 - x1) * max(0.0, y2 - y1)
+    first_area = max(0.0, first[2] - first[0]) * max(0.0, first[3] - first[1])
+    second_area = max(0.0, second[2] - second[0]) * max(0.0, second[3] - second[1])
+    union = first_area + second_area - intersection
+    return intersection / union if union > 0 else 0.0
+
+
+def box_center_distance(
+    first: tuple[float, float, float, float],
+    second: tuple[float, float, float, float],
+) -> float:
+    first_center = ((first[0] + first[2]) / 2, (first[1] + first[3]) / 2)
+    second_center = ((second[0] + second[2]) / 2, (second[1] + second[3]) / 2)
+    return float(
+        np.hypot(
+            first_center[0] - second_center[0],
+            first_center[1] - second_center[1],
+        )
+    )
+
+
+def pose_group_inside(
+    xy: np.ndarray,
+    confidence: np.ndarray,
+    indices: tuple[int, ...],
+    threshold: float,
+    roi: Rect,
+    width: int,
+    height: int,
+) -> bool:
+    points = [
+        (float(xy[index][0] / width), float(xy[index][1] / height))
+        for index in indices
+        if confidence[index] >= threshold
+    ]
+    if len(points) < 3:
+        return False
+    center = (
+        float(np.mean([point[0] for point in points])),
+        float(np.mean([point[1] for point in points])),
+    )
+    return roi.contains(center)
+
+
+def start_evidence_score(
+    confidence: np.ndarray, visibility_threshold: float, hip_rise: float
+) -> float:
+    visible = [
+        float(confidence[index])
+        for index in (LEFT_WRIST, RIGHT_WRIST, LEFT_HIP, RIGHT_HIP)
+        if confidence[index] >= visibility_threshold
+    ]
+    pose_score = float(np.mean(visible)) if visible else visibility_threshold
+    motion_score = min(1.0, hip_rise / 0.1)
+    return round(min(0.95, 0.55 + pose_score * 0.2 + motion_score * 0.2), 3)
 
 
 def resolve_limb_points(

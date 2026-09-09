@@ -13,6 +13,7 @@ from live_stream_worker import (
     build_observation_request,
     discard_unassigned_attempt,
     file_sha256,
+    has_confirmed_start,
     load_worker_calibration,
     normalize_stream_url,
     prune_stale_worker_files,
@@ -27,6 +28,9 @@ class LiveStreamWorkerTest(unittest.TestCase):
         )
 
         self.assertEqual(calibration["analysis_resolution"], [640, 360])
+        self.assertEqual(calibration["pose_visibility_threshold"], 0.45)
+        self.assertEqual(calibration["start_dwell_seconds"], 0.8)
+        self.assertEqual(calibration["start_confirmation_window_seconds"], 5.0)
         self.assertNotIn("route_id", calibration)
         self.assertNotIn("start_zones", calibration)
 
@@ -99,6 +103,10 @@ class LiveStreamWorkerTest(unittest.TestCase):
 
             self.assertFalse(video.exists())
             self.assertFalse(output.exists())
+
+    def test_only_confirmed_start_can_be_published(self) -> None:
+        self.assertFalse(has_confirmed_start({"result": {"started_at_s": None}}))
+        self.assertTrue(has_confirmed_start({"result": {"started_at_s": 12.5}}))
 
     def test_calculates_video_checksum_without_loading_entire_file(self) -> None:
         with TemporaryDirectory() as directory:

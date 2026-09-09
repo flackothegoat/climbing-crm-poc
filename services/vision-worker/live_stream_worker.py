@@ -27,6 +27,7 @@ from ultralytics import YOLO
 from analyze_climb_video import (
     Rect,
     analyze,
+    normalized_prediction_box,
     select_climber,
     to_observation_analysis,
 )
@@ -379,6 +380,7 @@ def main() -> None:
                 settings,
                 detector,
                 climber_roi,
+                calibration,
                 recorder,
                 jobs,
                 target_size,
@@ -418,6 +420,12 @@ def load_worker_calibration(
         "wall_roi",
         "pose_visibility_threshold",
         "start_dwell_seconds",
+        "start_confirmation_window_seconds",
+        "start_min_hip_rise_normalized",
+        "start_progress_min_vertical_gap_normalized",
+        "track_loss_tolerance_seconds",
+        "track_min_iou",
+        "track_max_center_distance_normalized",
         "finish_dwell_seconds",
         "finish_hand_tolerance_seconds",
         "contact_dwell_seconds",
@@ -490,6 +498,7 @@ def consume_stream(
     settings: WorkerSettings,
     detector: YOLO,
     climber_roi: Rect,
+    calibration: dict[str, Any],
     recorder: AttemptRecorder,
     jobs: queue.Queue[ClipJob | None],
     target_size: tuple[int, int],
@@ -520,6 +529,8 @@ def consume_stream(
     reference_idle_since: float | None = None
     reference_path = settings.output_path / "live-reference.jpg"
     climber_present = False
+    live_track_box: tuple[float, float, float, float] | None = None
+    live_track_roi: Rect | None = None
     completed = 0
     consecutive_failures = 0
     record_interval = 1.0 / settings.record_fps
@@ -548,12 +559,36 @@ def consume_stream(
             frame = cv2.resize(source_frame, target_size, interpolation=cv2.INTER_AREA)
             if now - last_detection >= detection_interval:
                 prediction = detector.predict(frame, imgsz=settings.imgsz, verbose=False)[0]
-                climber_present = (
-                    select_climber(
-                        prediction, climber_roi, target_size[0], target_size[1]
+                if (
+                    recorder.active
+                    and live_track_box is not None
+                    and live_track_roi is not None
+                ):
+                    person_index = select_climber(
+                        prediction,
+                        live_track_roi,
+                        target_size[0],
+                        target_size[1],
+                        tracked_box=live_track_box,
+                        track_min_iou=float(calibration["track_min_iou"]),
+                        track_max_center_distance=float(
+                            calibration["track_max_center_distance_normalized"]
+                        ),
                     )
-                    is not None
-                )
+                else:
+                    person_index, live_track_roi = select_live_start_candidate(
+                        prediction,
+                        route_definitions.get(),
+                        calibration,
+                        climber_roi,
+                        target_size[0],
+                        target_size[1],
+                    )
+                climber_present = person_index is not None
+                if person_index is not None:
+                    live_track_box = normalized_prediction_box(
+                        prediction, person_index, target_size[0], target_size[1]
+                    )
                 last_detection = now
             if not reference_path.exists() and not recorder.active:
                 if climber_present:
@@ -568,6 +603,11 @@ def consume_stream(
             if job:
                 jobs.put(job)
                 completed += 1
+                live_track_box = None
+                live_track_roi = None
+            elif not recorder.active and recorder.detected_since is None:
+                live_track_box = None
+                live_track_roi = None
             if now - last_status >= 5:
                 route_definitions.get()
                 report_status(
@@ -584,6 +624,61 @@ def consume_stream(
     finally:
         capture.release()
     return completed
+
+
+def select_live_start_candidate(
+    prediction: Any,
+    definitions: list[dict[str, Any]],
+    calibration: dict[str, Any],
+    fallback_roi: Rect,
+    width: int,
+    height: int,
+) -> tuple[int | None, Rect | None]:
+    geometries: list[tuple[Rect, list[Rect]]] = []
+    for definition in definitions:
+        roi = definition["roi"]
+        start_ids = set(definition["startHoldIds"])
+        start_zones = [
+            Rect.from_list(hold_rect(hold))
+            for hold in definition["holds"]
+            if hold["id"] in start_ids
+        ]
+        if start_zones:
+            geometries.append(
+                (
+                    Rect(roi["x1"], roi["y1"], roi["x2"], roi["y2"]),
+                    start_zones,
+                )
+            )
+    if not geometries and calibration.get("start_zones"):
+        geometries.append(
+            (
+                fallback_roi,
+                [Rect.from_list(item["rect"]) for item in calibration["start_zones"]],
+            )
+        )
+
+    candidates: list[tuple[float, int, Rect]] = []
+    for roi, start_zones in geometries:
+        person_index = select_climber(
+            prediction,
+            roi,
+            width,
+            height,
+            start_zones=start_zones,
+            visibility_threshold=float(calibration["pose_visibility_threshold"]),
+            contact_radius=float(calibration["contact_radius_px"]),
+            minimum_start_hits=2,
+        )
+        if person_index is None:
+            continue
+        box = normalized_prediction_box(prediction, person_index, width, height)
+        area = max(0.0, box[2] - box[0]) * max(0.0, box[3] - box[1])
+        candidates.append((area, person_index, roi))
+    if not candidates:
+        return None, None
+    _, person_index, roi = max(candidates, key=lambda item: item[0])
+    return person_index, roi
 
 
 def analysis_loop(
@@ -640,6 +735,10 @@ def analyze_job(
         else None,
         pose_model,
     )
+    if not has_confirmed_start(result):
+        discard_unassigned_attempt(job, output)
+        print(f"unassigned {job.attempt_id}: start was not confirmed", flush=True)
+        return
     analysis = to_observation_analysis(result, settings.model_path, calibration)
     request = build_observation_request(job, settings, analysis)
     (output / "summary.json").write_text(
@@ -714,7 +813,7 @@ def analyze_multi_route_job(
             json.dumps(result, ensure_ascii=False, indent=2), encoding="utf-8"
         )
         (candidate_output / "annotated.mp4").unlink(missing_ok=True)
-        if result["result"]["started_at_s"] is None:
+        if not has_confirmed_start(result):
             continue
         score = float(result["result"].get("route_contact_ratio", 0)) + float(
             analysis["confidence"]
@@ -785,6 +884,10 @@ def build_observation_request(
     if wall_segment_id:
         request["wallSegmentId"] = wall_segment_id
     return request
+
+
+def has_confirmed_start(result: dict[str, Any]) -> bool:
+    return result.get("result", {}).get("started_at_s") is not None
 
 
 def fetch_route_definitions(
