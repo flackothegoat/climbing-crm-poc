@@ -2,9 +2,10 @@
 
 import { useEffect, useState, type ReactNode } from 'react';
 import { PageHeading, SectionCard } from '../dashboard/page-components';
-import { climbingColorCss } from '../common/climbing-colors';
+import { climbingColorCss, climbingColorLabel } from '../common/climbing-colors';
 import {
   getRouteAnalytics,
+  routePhotoUrl,
   type OperationalRoute,
   type RouteAnalytics,
   type RouteAnalyticsItem,
@@ -34,9 +35,9 @@ export function RouteAnalyticsPage({
   return (
     <div className="page-stack">
       <PageHeading
-        eyebrow="线路档案 · 反馈与复盘"
+        eyebrow="线路反馈"
         title={`${route.code} · ${route.name}`}
-        description="按线路版本核对 Worker 算法识别与攀爬者扫码反馈，两类数据独立统计。"
+        description="看看这条线路的攀爬结果，以及攀爬者扫码留下的评价。"
         aside={
           <button className={styles.secondaryButton} type="button" onClick={onBack}>
             返回线路档案
@@ -44,17 +45,10 @@ export function RouteAnalyticsPage({
         }
       />
       {error && <p className="team-feedback is-error">{error}</p>}
-      <div className={styles.sourceNotices}>
-        <DataNotice label="算法识别口径">
-          {data?.scope.algorithmNotice ?? '正在读取 Worker 识别数据口径…'}
-        </DataNotice>
-        <DataNotice label="扫码反馈口径">
-          {data?.scope.metricNotice ?? '正在读取扫码反馈数据口径…'}
-        </DataNotice>
-      </div>
+      <RouteReviewOverview route={route} />
       {!data ? (
-        <SectionCard title="线路数据" description="正在从业务数据库读取真实记录。">
-          <p className={styles.empty}>正在聚合线路复盘数据…</p>
+        <SectionCard title="反馈数据" description="正在加载">
+          <p className={styles.empty}>正在读取线路数据…</p>
         </SectionCard>
       ) : data.items.length ? (
         <div className={styles.versionReviewList}>
@@ -63,10 +57,10 @@ export function RouteAnalyticsPage({
           ))}
         </div>
       ) : (
-        <SectionCard title="线路数据" description="草稿版本不会进入识别或反馈统计。">
+        <SectionCard title="反馈数据">
           <div className={styles.emptyState}>
-            <strong>这条线路还没有可复盘的发布版本</strong>
-            <p>线路发布后，Worker 识别与二维码反馈会按版本分别归档。</p>
+            <strong>暂时没有反馈数据</strong>
+            <p>线路发布并投入使用后，这里会显示攀爬结果和扫码评价。</p>
           </div>
         </SectionCard>
       )}
@@ -74,57 +68,87 @@ export function RouteAnalyticsPage({
   );
 }
 
+function RouteReviewOverview({ route }: { route: OperationalRoute }) {
+  return (
+    <section className={styles.reviewOverview}>
+      <div className={styles.reviewPhoto}>
+        {route.version?.hasPhoto ? (
+          // Authenticated same-origin image; the browser sends the session cookie.
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={routePhotoUrl(route.id)} alt={`${route.name} 线路`} />
+        ) : (
+          <div className={styles.reviewPhotoEmpty}>
+            <span style={{ background: climbingColorCss(route.color) }} />
+            <p>暂无线路图片</p>
+          </div>
+        )}
+      </div>
+      <div className={styles.reviewOverviewCopy}>
+        <small>线路一览</small>
+        <h3>{route.name}</h3>
+        <p>{route.code}</p>
+        <dl>
+          <div>
+            <dt>难度</dt>
+            <dd>{route.grade}</dd>
+          </div>
+          <div>
+            <dt>颜色</dt>
+            <dd>{climbingColorLabel(route.color)}</dd>
+          </div>
+          <div>
+            <dt>墙段</dt>
+            <dd>{route.wallSegments.map((wall) => wall.code).join(' / ') || '未填写'}</dd>
+          </div>
+          <div>
+            <dt>状态</dt>
+            <dd>{routeStatusLabel(route.status)}</dd>
+          </div>
+        </dl>
+      </div>
+    </section>
+  );
+}
+
 function RouteVersionReview({ item }: { item: RouteAnalyticsItem }) {
   return (
     <SectionCard
-      title={`V${item.versionNumber} · ${item.grade ?? '未定级'}`}
-      description={`${item.wallSegments.map((wall) => wall.code).join(' / ') || '未关联墙段'} · ${routeStatusLabel(item.routeStatus)}`}
+      title={`第 ${item.versionNumber} 版`}
+      description={`难度 ${item.grade ?? '未填写'} · ${item.wallSegments.map((wall) => wall.code).join(' / ') || '未填写墙段'}`}
     >
-      <div className={styles.versionIdentity}>
-        <span style={{ background: item.color ? climbingColorCss(item.color) : '#8da097' }} />
-        <p>
-          以下数据只属于 {item.routeCode} 的 V{item.versionNumber}，不会与其他线路合并。
-        </p>
-      </div>
       <div className={styles.analyticsSources}>
         <AnalyticsSource
-          title="算法识别"
-          source="视觉 Worker 真实记录"
+          title="摄像头记录"
+          source="自动记录的攀爬结果"
+          badge="摄像头"
           empty={item.algorithm.sampleSize === 0}
-          emptyText="暂无 Worker 识别记录。线路产生正式识别结果后，这里才会出现数据。"
+          emptyText="还没有识别到这条线路的攀爬记录。"
         >
           <ReviewMetric
-            label="识别记录"
+            label="总次数"
             value={String(item.algorithm.sampleSize)}
-            detail="该线路版本"
+            detail="已记录的攀爬"
           />
+          <ReviewMetric label="完攀" value={String(item.algorithm.completed)} detail="到达终点" />
+          <ReviewMetric label="未完攀" value={String(item.algorithm.failed)} detail="未到达终点" />
           <ReviewMetric
-            label="成功次数"
-            value={String(item.algorithm.completed)}
-            detail="原始判定为完攀"
-          />
-          <ReviewMetric
-            label="失败次数"
-            value={String(item.algorithm.failed)}
-            detail="原始判定为失败"
-          />
-          <ReviewMetric
-            label="算法完攀率"
+            label="完攀率"
             value={percentage(item.algorithm.completionRate)}
-            detail="成功 ÷（成功 + 失败）"
+            detail="完攀次数占比"
           />
           <ReviewMetric
-            label="其他结果"
+            label="待确认"
             value={String(item.algorithm.abandoned + item.algorithm.unknown)}
-            detail={`放弃 ${item.algorithm.abandoned} · 不确定 ${item.algorithm.unknown}`}
+            detail="结果暂不明确"
           />
         </AnalyticsSource>
 
         <AnalyticsSource
           title="扫码反馈"
-          source="攀爬者主动提交的真实反馈"
+          source="攀爬者扫码留下的评价"
+          badge="扫码"
           empty={item.sampleSize === 0}
-          emptyText="暂无扫码反馈。此处不会用模拟样本填充。"
+          emptyText="还没有人提交扫码反馈。"
         >
           <ReviewMetric
             label="反馈样本"
@@ -132,9 +156,9 @@ function RouteVersionReview({ item }: { item: RouteAnalyticsItem }) {
             detail={confidenceLabel(item.confidence)}
           />
           <ReviewMetric
-            label="反馈者完攀率"
+            label="反馈完攀率"
             value={percentage(item.respondentCompletionRate)}
-            detail="仅代表主动反馈者"
+            detail="提交反馈的人"
           />
           <ReviewMetric
             label="难度合适"
@@ -144,18 +168,18 @@ function RouteVersionReview({ item }: { item: RouteAnalyticsItem }) {
           <ReviewMetric
             label="喜欢比例"
             value={percentage(item.enjoyment.likeRate)}
-            detail={`${item.enjoyment.likes} 份喜欢`}
+            detail={`${item.enjoyment.likes} 人喜欢`}
           />
           <ReviewMetric
             label="安全疑虑"
             value={String(item.safetyConcernCount)}
-            detail={item.safetyConcernCount ? '需要人工优先复核' : '暂无反馈'}
+            detail={item.safetyConcernCount ? '请尽快查看' : '没有人提出'}
             warning={item.safetyConcernCount > 0}
           />
           <div
             className={`${styles.sourceRecommendation} ${item.recommendation.code === 'SAFETY_REVIEW' ? styles.warning : ''}`}
           >
-            <small>透明规则建议</small>
+            <small>当前建议</small>
             <strong>{item.recommendation.label}</strong>
           </div>
         </AnalyticsSource>
@@ -167,12 +191,14 @@ function RouteVersionReview({ item }: { item: RouteAnalyticsItem }) {
 function AnalyticsSource({
   title,
   source,
+  badge,
   empty,
   emptyText,
   children,
 }: {
   title: string;
   source: string;
+  badge: string;
   empty: boolean;
   emptyText: string;
   children: ReactNode;
@@ -184,20 +210,11 @@ function AnalyticsSource({
           <h4>{title}</h4>
           <p>{source}</p>
         </div>
-        <span>{empty ? '暂无数据' : '真实数据'}</span>
+        <span>{badge}</span>
       </header>
       {empty ? <p className={styles.sourceEmpty}>{emptyText}</p> : null}
       <div className={styles.sourceMetrics}>{children}</div>
     </section>
-  );
-}
-
-function DataNotice({ label, children }: { label: string; children: ReactNode }) {
-  return (
-    <div className={styles.metricNotice}>
-      <strong>{label}</strong>
-      <p>{children}</p>
-    </div>
   );
 }
 

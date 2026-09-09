@@ -83,7 +83,7 @@ function Sidebar(props: SidebarProps) {
         <span className="dashboard-brand-mark">↗</span>
         <span>
           <strong>Climbing</strong>
-          <small>CRM</small>
+          <small>数字化运营平台</small>
         </span>
       </Link>
       <nav className="dashboard-navigation" aria-label="看板导航">

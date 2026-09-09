@@ -96,9 +96,10 @@
 
 .dashboard-brand small {
   color: #91a89f;
-  font-size: 11px;
+  font-size: 9px;
   font-weight: 700;
-  letter-spacing: 0.24em;
+  letter-spacing: 0.08em;
+  white-space: nowrap;
 }
 
 .dashboard-navigation {
