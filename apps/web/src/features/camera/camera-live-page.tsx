@@ -144,6 +144,10 @@ export function CameraLivePage() {
 }
 
 function workerStatusLabel(status: CameraWorkerStatus | null) {
+  if (status?.status === 'ONLINE' && status.heartbeat?.recognitionState === 'PAUSED_IMAGE_QUALITY')
+    return '画面异常，识别已暂停';
+  if (status?.status === 'ONLINE' && status.heartbeat?.recognitionState === 'WAITING_REFERENCE')
+    return '正在准备识别';
   if (status?.status === 'ONLINE') return '实时算法监控中';
   if (status?.status === 'OFFLINE') return '算法 Worker 离线';
   if (status?.status === 'NOT_CONFIGURED') return '算法 Worker 未配置';

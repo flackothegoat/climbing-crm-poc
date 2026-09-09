@@ -127,6 +127,7 @@ export interface CameraWorkerStatus {
   heartbeat: {
     status: 'ONLINE' | 'OFFLINE';
     detail: string;
+    recognitionState?: 'ACTIVE' | 'WAITING_REFERENCE' | 'PAUSED_IMAGE_QUALITY';
     activeAttempt?: string | null;
     routeDefinitionCount: number;
     checkedAt: string;

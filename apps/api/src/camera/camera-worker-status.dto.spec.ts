@@ -7,11 +7,16 @@ describe('camera worker heartbeat DTO', () => {
       parseCameraWorkerHeartbeat({
         status: 'ONLINE',
         detail: '等待攀爬者进入',
+        recognitionState: 'ACTIVE',
         activeAttempt: null,
         routeDefinitionCount: 1,
         checkedAt: '2026-09-01T04:00:00+00:00',
       }),
-    ).toMatchObject({ status: 'ONLINE', routeDefinitionCount: 1 });
+    ).toMatchObject({
+      status: 'ONLINE',
+      recognitionState: 'ACTIVE',
+      routeDefinitionCount: 1,
+    });
   });
 
   it('rejects invalid route counts and timestamps', () => {

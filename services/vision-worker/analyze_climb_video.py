@@ -13,6 +13,12 @@ import numpy as np
 from ultralytics import YOLO
 
 from attempt_gate import AttemptGate, AttemptGateConfig, AttemptSignal
+from visual_guard import (
+    GuardResult,
+    assess_foreground_presence,
+    assess_image_quality,
+    assess_pose_candidate,
+)
 
 
 LEFT_SHOULDER = 5
@@ -176,6 +182,9 @@ def analyze(
     finish_items = calibration.get("finish_zones") or [calibration["finish_zone"]]
     finish_zones = [Rect.from_list(item["rect"]) for item in finish_items]
     visibility_threshold = float(calibration["pose_visibility_threshold"])
+    detection_confidence_threshold = float(
+        calibration["person_detection_confidence"]
+    )
     start_dwell = float(calibration["start_dwell_seconds"])
     start_confirmation_window = float(
         calibration.get("start_confirmation_window_seconds", 5.0)
@@ -247,6 +256,12 @@ def analyze(
     route_contact_samples = 0
     off_route_samples = 0
     tracked_box: tuple[float, float, float, float] | None = None
+    pose_candidate_frames = 0
+    image_quality_frames = 0
+    foreground_confirmed_frames = 0
+    valid_person_streak_frames = 0
+    max_valid_person_streak_frames = 0
+    guard_rejections: dict[str, int] = {}
     started_clock = time.perf_counter()
 
     while True:
@@ -263,34 +278,69 @@ def analyze(
         last_sample_at = timestamp_s
         processed_frames += 1
 
-        prediction = model.predict(
-            frame, imgsz=imgsz, conf=0.12, device="cpu", verbose=False
-        )[0]
-        person_index = select_climber(
-            prediction,
-            climber_roi,
-            width,
-            height,
-            tracked_box=tracked_box
-            if start_gate.engaged or state != "WAITING_FOR_START"
-            else None,
-            start_landmark_distance=start_hold_distance,
-            start_zones=start_zones,
-            visibility_threshold=visibility_threshold,
-            contact_radius=contact_radius,
-            track_min_iou=track_min_iou,
-            track_max_center_distance=track_max_center_distance,
-            minimum_start_hits=2,
-        )
+        quality = image_quality_guard(frame, climber_roi, calibration)
+        person_index: int | None = None
+        pose_candidate_detected = False
+        foreground = GuardResult(False, (), {})
+        prediction: Any | None = None
+        if quality.accepted:
+            image_quality_frames += 1
+            prediction = model.predict(
+                frame,
+                imgsz=imgsz,
+                conf=detection_confidence_threshold,
+                device="cpu",
+                verbose=False,
+            )[0]
+            person_index = select_climber(
+                prediction,
+                climber_roi,
+                width,
+                height,
+                tracked_box=tracked_box
+                if start_gate.engaged or state != "WAITING_FOR_START"
+                else None,
+                start_landmark_distance=start_hold_distance,
+                start_zones=start_zones,
+                visibility_threshold=visibility_threshold,
+                contact_radius=contact_radius,
+                track_min_iou=track_min_iou,
+                track_max_center_distance=track_max_center_distance,
+                minimum_start_hits=2,
+                pose_guard_config=calibration,
+            )
+            pose_candidate_detected = person_index is not None
+            if person_index is not None:
+                pose_candidate_frames += 1
+                candidate_box = normalized_prediction_box(
+                    prediction, person_index, width, height
+                )
+                foreground = foreground_presence_guard(
+                    frame, reference, candidate_box, calibration
+                )
+                if foreground.accepted:
+                    foreground_confirmed_frames += 1
+                else:
+                    person_index = None
+        record_rejections(guard_rejections, quality)
+        record_rejections(guard_rejections, foreground)
         record: dict[str, Any] = {
             "timestamp_s": round(timestamp_s, 3),
             "pose_detected": person_index is not None,
+            "pose_candidate_detected": pose_candidate_detected,
+            "image_quality_accepted": quality.accepted,
+            "image_quality_reasons": list(quality.reasons),
+            "image_quality_metrics": quality.metrics,
+            "foreground_accepted": foreground.accepted,
+            "foreground_reasons": list(foreground.reasons),
+            "foreground_metrics": foreground.metrics,
             "state": state,
         }
         limb_points: dict[str, tuple[int, int]] = {}
         limb_contacts: dict[str, str] = {}
 
         if person_index is None:
+            valid_person_streak_frames = 0
             if state in {"WAITING_FOR_START", "START_CANDIDATE"}:
                 decision = start_gate.update(
                     AttemptSignal(timestamp_s=timestamp_s, track_present=False)
@@ -300,6 +350,11 @@ def analyze(
                     tracked_box = None
         else:
             detected_frames += 1
+            valid_person_streak_frames += 1
+            max_valid_person_streak_frames = max(
+                max_valid_person_streak_frames, valid_person_streak_frames
+            )
+            assert prediction is not None
             tracked_box = normalized_prediction_box(
                 prediction, person_index, width, height
             )
@@ -569,6 +624,19 @@ def analyze(
             "pose_detection_rate": round(detected_frames / processed_frames, 4)
             if processed_frames
             else 0.0,
+            "pose_candidate_frames": pose_candidate_frames,
+            "valid_person_frames": detected_frames,
+            "foreground_confirmed_frames": foreground_confirmed_frames,
+            "image_quality_accepted_frames": image_quality_frames,
+            "image_quality_accepted_ratio": round(
+                image_quality_frames / processed_frames, 4
+            )
+            if processed_frames
+            else 0.0,
+            "max_valid_person_streak_s": round(
+                max_valid_person_streak_frames / output_fps, 3
+            ),
+            "visual_guard_rejections": guard_rejections,
             "elapsed_s": round(elapsed_s, 3),
         },
         "result": {
@@ -818,6 +886,68 @@ def sample_distance(distance: np.ndarray, point: tuple[int, int]) -> float:
     return float(distance[y, x])
 
 
+def image_quality_guard(
+    frame: np.ndarray, roi: Rect, calibration: dict[str, Any]
+) -> GuardResult:
+    return assess_image_quality(
+        frame,
+        roi,
+        min_mean_luma=float(calibration["image_min_mean_luma"]),
+        max_dark_ratio=float(calibration["image_max_dark_ratio"]),
+        max_bright_ratio=float(calibration["image_max_bright_ratio"]),
+        min_luma_std=float(calibration["image_min_luma_std"]),
+    )
+
+
+def foreground_presence_guard(
+    frame: np.ndarray,
+    reference: np.ndarray | None,
+    normalized_box: tuple[float, float, float, float],
+    calibration: dict[str, Any],
+) -> GuardResult:
+    return assess_foreground_presence(
+        frame,
+        reference,
+        normalized_box,
+        difference_threshold=int(calibration["foreground_difference_threshold"]),
+        min_changed_ratio=float(calibration["foreground_min_changed_ratio"]),
+        max_changed_ratio=float(calibration["foreground_max_changed_ratio"]),
+        min_component_ratio=float(calibration["foreground_min_component_ratio"]),
+    )
+
+
+def pose_candidate_guard(
+    prediction: Any,
+    person_index: int,
+    width: int,
+    height: int,
+    calibration: dict[str, Any],
+) -> GuardResult:
+    return assess_pose_candidate(
+        prediction,
+        person_index,
+        width,
+        height,
+        detection_confidence_threshold=float(
+            calibration["person_detection_confidence"]
+        ),
+        visibility_threshold=float(calibration["pose_visibility_threshold"]),
+        min_visible_body_keypoints=int(calibration["pose_min_body_keypoints"]),
+        min_visible_core_keypoints=int(calibration["pose_min_core_keypoints"]),
+        min_visible_lower_body_keypoints=int(
+            calibration["pose_min_lower_body_keypoints"]
+        ),
+        min_box_area_ratio=float(calibration["person_min_box_area_ratio"]),
+        max_box_area_ratio=float(calibration["person_max_box_area_ratio"]),
+        min_box_height_ratio=float(calibration["person_min_box_height_ratio"]),
+    )
+
+
+def record_rejections(counts: dict[str, int], result: GuardResult) -> None:
+    for reason in result.reasons:
+        counts[reason] = counts.get(reason, 0) + 1
+
+
 def select_climber(
     prediction: Any,
     roi: Rect,
@@ -832,12 +962,17 @@ def select_climber(
     track_min_iou: float = 0.1,
     track_max_center_distance: float = 0.12,
     minimum_start_hits: int = 0,
+    pose_guard_config: dict[str, Any] | None = None,
 ) -> int | None:
     if prediction.keypoints is None or len(prediction.keypoints.data) == 0:
         return None
     boxes = prediction.boxes.xyxy.cpu().numpy()
     candidates: list[tuple[tuple[float, ...], int]] = []
     for index, box in enumerate(boxes):
+        if pose_guard_config is not None and not pose_candidate_guard(
+            prediction, index, width, height, pose_guard_config
+        ).accepted:
+            continue
         center = ((box[0] + box[2]) / (2 * width), (box[1] + box[3]) / (2 * height))
         if not roi.contains(center):
             continue

@@ -27,10 +27,13 @@ from ultralytics import YOLO
 from analyze_climb_video import (
     Rect,
     analyze,
+    foreground_presence_guard,
+    image_quality_guard,
     normalized_prediction_box,
     select_climber,
     to_observation_analysis,
 )
+from visual_guard import describe_guard_reasons
 
 
 @dataclass(frozen=True)
@@ -418,7 +421,24 @@ def load_worker_calibration(
         "reference_time_s",
         "climber_roi",
         "wall_roi",
+        "person_detection_confidence",
         "pose_visibility_threshold",
+        "pose_min_body_keypoints",
+        "pose_min_core_keypoints",
+        "pose_min_lower_body_keypoints",
+        "person_min_box_area_ratio",
+        "person_max_box_area_ratio",
+        "person_min_box_height_ratio",
+        "image_min_mean_luma",
+        "image_max_dark_ratio",
+        "image_max_bright_ratio",
+        "image_min_luma_std",
+        "foreground_difference_threshold",
+        "foreground_min_changed_ratio",
+        "foreground_max_changed_ratio",
+        "foreground_min_component_ratio",
+        "publication_min_valid_person_seconds",
+        "publication_min_image_quality_ratio",
         "start_dwell_seconds",
         "start_confirmation_window_seconds",
         "start_min_hip_rise_normalized",
@@ -521,6 +541,9 @@ def consume_stream(
         "ONLINE",
         "实时流已连接",
         route_definition_count=route_definitions.count,
+        recognition_state="WAITING_REFERENCE"
+        if not (settings.output_path / "live-reference.jpg").exists()
+        else "ACTIVE",
     )
     last_recorded = 0.0
     last_detection = 0.0
@@ -528,6 +551,9 @@ def consume_stream(
     last_prune = 0.0
     reference_idle_since: float | None = None
     reference_path = settings.output_path / "live-reference.jpg"
+    reference_frame = (
+        cv2.imread(str(reference_path)) if reference_path.exists() else None
+    )
     climber_present = False
     live_track_box: tuple[float, float, float, float] | None = None
     live_track_roi: Rect | None = None
@@ -535,6 +561,12 @@ def consume_stream(
     consecutive_failures = 0
     record_interval = 1.0 / settings.record_fps
     detection_interval = 1.0 / settings.detection_fps
+    recognition_detail = "等待攀爬者进入"
+    recognition_state = (
+        "ACTIVE" if reference_frame is not None else "WAITING_REFERENCE"
+    )
+    any_person_present = False
+    image_quality_accepted = False
     try:
         while not shutdown.is_set() and (
             remaining_attempts <= 0 or completed < remaining_attempts
@@ -558,46 +590,102 @@ def consume_stream(
             last_recorded = now
             frame = cv2.resize(source_frame, target_size, interpolation=cv2.INTER_AREA)
             if now - last_detection >= detection_interval:
-                prediction = detector.predict(frame, imgsz=settings.imgsz, verbose=False)[0]
-                if (
-                    recorder.active
-                    and live_track_box is not None
-                    and live_track_roi is not None
-                ):
-                    person_index = select_climber(
-                        prediction,
-                        live_track_roi,
-                        target_size[0],
-                        target_size[1],
-                        tracked_box=live_track_box,
-                        track_min_iou=float(calibration["track_min_iou"]),
-                        track_max_center_distance=float(
-                            calibration["track_max_center_distance_normalized"]
-                        ),
+                quality = image_quality_guard(frame, climber_roi, calibration)
+                person_index: int | None = None
+                any_person_present = False
+                climber_present = False
+                image_quality_accepted = quality.accepted
+                if quality.accepted:
+                    prediction = detector.predict(
+                        frame,
+                        imgsz=settings.imgsz,
+                        conf=float(calibration["person_detection_confidence"]),
+                        verbose=False,
+                    )[0]
+                    any_person_present = (
+                        select_climber(
+                            prediction,
+                            climber_roi,
+                            target_size[0],
+                            target_size[1],
+                            pose_guard_config=calibration,
+                        )
+                        is not None
                     )
+                    if (
+                        recorder.active
+                        and live_track_box is not None
+                        and live_track_roi is not None
+                    ):
+                        person_index = select_climber(
+                            prediction,
+                            live_track_roi,
+                            target_size[0],
+                            target_size[1],
+                            tracked_box=live_track_box,
+                            track_min_iou=float(calibration["track_min_iou"]),
+                            track_max_center_distance=float(
+                                calibration["track_max_center_distance_normalized"]
+                            ),
+                            pose_guard_config=calibration,
+                        )
+                    else:
+                        person_index, live_track_roi = select_live_start_candidate(
+                            prediction,
+                            route_definitions.get(),
+                            calibration,
+                            climber_roi,
+                            target_size[0],
+                            target_size[1],
+                        )
+                    if person_index is not None:
+                        candidate_box = normalized_prediction_box(
+                            prediction, person_index, target_size[0], target_size[1]
+                        )
+                        foreground = foreground_presence_guard(
+                            frame, reference_frame, candidate_box, calibration
+                        )
+                        climber_present = foreground.accepted
+                        if climber_present:
+                            live_track_box = candidate_box
+                            recognition_state = "ACTIVE"
+                            recognition_detail = (
+                                "尝试录制中" if recorder.active else "检测到起步候选"
+                            )
+                        elif "REFERENCE_SCENE_MISMATCH" in foreground.reasons:
+                            recognition_state = "PAUSED_IMAGE_QUALITY"
+                            recognition_detail = (
+                                "当前画面与无人墙面基准差异过大，识别已暂停"
+                            )
+                        else:
+                            recognition_state = "ACTIVE"
+                            recognition_detail = "等待攀爬者进入"
+                    elif reference_frame is None:
+                        recognition_state = "WAITING_REFERENCE"
+                        recognition_detail = "等待获取空墙参考画面"
+                    else:
+                        recognition_state = "ACTIVE"
+                        recognition_detail = "等待攀爬者进入"
                 else:
-                    person_index, live_track_roi = select_live_start_candidate(
-                        prediction,
-                        route_definitions.get(),
-                        calibration,
-                        climber_roi,
-                        target_size[0],
-                        target_size[1],
-                    )
-                climber_present = person_index is not None
-                if person_index is not None:
-                    live_track_box = normalized_prediction_box(
-                        prediction, person_index, target_size[0], target_size[1]
+                    live_track_box = None
+                    live_track_roi = None
+                    recognition_state = "PAUSED_IMAGE_QUALITY"
+                    recognition_detail = (
+                        "画面质量不满足识别条件："
+                        + describe_guard_reasons(quality.reasons)
                     )
                 last_detection = now
-            if not reference_path.exists() and not recorder.active:
-                if climber_present:
+            if reference_frame is None and not recorder.active:
+                if any_person_present or not image_quality_accepted:
                     reference_idle_since = None
                 else:
                     reference_idle_since = reference_idle_since or now
                     if now - reference_idle_since >= 2:
                         if not cv2.imwrite(str(reference_path), frame):
                             raise RuntimeError("无法保存实时空墙参考帧")
+                        reference_frame = frame.copy()
+                        recognition_state = "ACTIVE"
+                        recognition_detail = "空墙参考已建立，等待攀爬者进入"
                         print(f"saved empty-wall reference {reference_path}", flush=True)
             job = recorder.push(frame, climber_present, now, datetime.now(timezone.utc))
             if job:
@@ -613,9 +701,10 @@ def consume_stream(
                 report_status(
                     settings,
                     "ONLINE",
-                    "尝试录制中" if recorder.active else "等待攀爬者进入",
+                    "尝试录制中" if recorder.active else recognition_detail,
                     active_attempt=recorder.attempt_id,
                     route_definition_count=route_definitions.count,
+                    recognition_state=recognition_state,
                 )
                 last_status = now
             if now - last_prune >= 5 * 60:
@@ -669,6 +758,7 @@ def select_live_start_candidate(
             visibility_threshold=float(calibration["pose_visibility_threshold"]),
             contact_radius=float(calibration["contact_radius_px"]),
             minimum_start_hits=2,
+            pose_guard_config=calibration,
         )
         if person_index is None:
             continue
@@ -735,9 +825,21 @@ def analyze_job(
         else None,
         pose_model,
     )
-    if not has_confirmed_start(result):
-        discard_unassigned_attempt(job, output)
-        print(f"unassigned {job.attempt_id}: start was not confirmed", flush=True)
+    rejection_reasons = publication_rejection_reasons(result, calibration)
+    if rejection_reasons:
+        discard_unassigned_attempt(
+            job,
+            output,
+            reason="VISUAL_GUARD_REJECTED",
+            diagnostics={
+                "reasons": rejection_reasons,
+                "processing": result.get("processing", {}),
+            },
+        )
+        print(
+            f"discarded {job.attempt_id}: {', '.join(rejection_reasons)}",
+            flush=True,
+        )
         return
     analysis = to_observation_analysis(result, settings.model_path, calibration)
     request = build_observation_request(job, settings, analysis)
@@ -779,6 +881,7 @@ def analyze_multi_route_job(
     pose_model: YOLO,
 ) -> None:
     candidates: list[tuple[float, dict[str, Any], dict[str, Any], dict[str, Any]]] = []
+    rejected_candidates: dict[str, dict[str, Any]] = {}
     all_holds = unique_holds(
         hold for definition in definitions for hold in definition["holds"]
     )
@@ -813,7 +916,13 @@ def analyze_multi_route_job(
             json.dumps(result, ensure_ascii=False, indent=2), encoding="utf-8"
         )
         (candidate_output / "annotated.mp4").unlink(missing_ok=True)
-        if not has_confirmed_start(result):
+        rejection_reasons = publication_rejection_reasons(result, calibration)
+        if rejection_reasons:
+            rejected_candidates[definition["routeVersion"]["id"]] = {
+                "routeCode": definition["route"]["code"],
+                "reasons": rejection_reasons,
+                "processing": result.get("processing", {}),
+            }
             continue
         score = float(result["result"].get("route_contact_ratio", 0)) + float(
             analysis["confidence"]
@@ -821,8 +930,13 @@ def analyze_multi_route_job(
         candidates.append((score, definition, result, analysis))
 
     if not candidates:
-        discard_unassigned_attempt(job, output)
-        print(f"unassigned {job.attempt_id}: no configured route start", flush=True)
+        discard_unassigned_attempt(
+            job,
+            output,
+            reason="NO_VALID_CLIMBING_ATTEMPT",
+            diagnostics={"routeCandidates": rejected_candidates},
+        )
+        print(f"discarded {job.attempt_id}: no valid route attempt", flush=True)
         return
 
     _, definition, result, analysis = max(candidates, key=lambda item: item[0])
@@ -888,6 +1002,26 @@ def build_observation_request(
 
 def has_confirmed_start(result: dict[str, Any]) -> bool:
     return result.get("result", {}).get("started_at_s") is not None
+
+
+def publication_rejection_reasons(
+    result: dict[str, Any], calibration: dict[str, Any]
+) -> list[str]:
+    reasons: list[str] = []
+    if not has_confirmed_start(result):
+        reasons.append("START_NOT_CONFIRMED")
+    processing = result.get("processing", {})
+    if float(processing.get("max_valid_person_streak_s", 0)) < float(
+        calibration["publication_min_valid_person_seconds"]
+    ):
+        reasons.append("INSUFFICIENT_VALID_PERSON_TRACK")
+    if int(processing.get("foreground_confirmed_frames", 0)) <= 0:
+        reasons.append("NO_FOREGROUND_PERSON")
+    if float(processing.get("image_quality_accepted_ratio", 0)) < float(
+        calibration["publication_min_image_quality_ratio"]
+    ):
+        reasons.append("INSUFFICIENT_IMAGE_QUALITY")
+    return reasons
 
 
 def fetch_route_definitions(
@@ -1075,7 +1209,26 @@ def file_sha256(path: Path) -> str:
     return digest.hexdigest()
 
 
-def discard_unassigned_attempt(job: ClipJob, output: Path) -> None:
+def discard_unassigned_attempt(
+    job: ClipJob,
+    output: Path,
+    *,
+    reason: str = "UNASSIGNED_ATTEMPT",
+    diagnostics: dict[str, Any] | None = None,
+) -> None:
+    audit_path = output.parent.parent / "discarded-attempts"
+    audit_path.mkdir(parents=True, exist_ok=True)
+    audit_record = {
+        "attemptId": job.attempt_id,
+        "observedAt": job.observed_at,
+        "durationS": round(job.duration_s, 3),
+        "reason": reason,
+        "diagnostics": diagnostics or {},
+        "discardedAt": datetime.now(timezone.utc).isoformat(),
+    }
+    (audit_path / f"{safe_path(job.attempt_id)}.json").write_text(
+        json.dumps(audit_record, ensure_ascii=False, indent=2), encoding="utf-8"
+    )
     job.video_path.unlink(missing_ok=True)
     shutil.rmtree(output, ignore_errors=True)
 
@@ -1097,6 +1250,11 @@ def prune_stale_worker_files(output_path: Path, max_age_s: float = 24 * 60 * 60)
         for attempt in attempts.iterdir():
             if attempt.is_dir() and attempt.stat().st_mtime < cutoff:
                 shutil.rmtree(attempt, ignore_errors=True)
+    discarded = output_path / "discarded-attempts"
+    if discarded.exists():
+        for record in discarded.glob("*.json"):
+            if record.stat().st_mtime < cutoff:
+                record.unlink(missing_ok=True)
 
 
 def report_status(
@@ -1106,6 +1264,7 @@ def report_status(
     *,
     active_attempt: str | None = None,
     route_definition_count: int = 0,
+    recognition_state: str | None = None,
 ) -> None:
     checked_at = datetime.now(timezone.utc).isoformat()
     write_status(
@@ -1115,6 +1274,7 @@ def report_status(
         active_attempt=active_attempt,
         route_definition_count=route_definition_count,
         checked_at=checked_at,
+        recognition_state=recognition_state,
     )
     if not settings.api_url or not settings.worker_token:
         return
@@ -1125,6 +1285,8 @@ def report_status(
         "routeDefinitionCount": route_definition_count,
         "checkedAt": checked_at,
     }
+    if recognition_state:
+        payload["recognitionState"] = recognition_state
     try:
         post_worker_heartbeat(settings.api_url, settings.worker_token, payload)
     except Exception as error:
@@ -1159,6 +1321,7 @@ def write_status(
     active_attempt: str | None = None,
     route_definition_count: int = 0,
     checked_at: str | None = None,
+    recognition_state: str | None = None,
 ) -> None:
     output_path.mkdir(parents=True, exist_ok=True)
     payload = {
@@ -1168,6 +1331,8 @@ def write_status(
         "routeDefinitionCount": route_definition_count,
         "checkedAt": checked_at or datetime.now(timezone.utc).isoformat(),
     }
+    if recognition_state:
+        payload["recognitionState"] = recognition_state
     status_path = output_path / "status.json"
     temporary_path = output_path / "status.json.tmp"
     temporary_path.write_text(

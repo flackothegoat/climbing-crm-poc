@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import os
 import time
 import unittest
@@ -16,7 +17,9 @@ from live_stream_worker import (
     has_confirmed_start,
     load_worker_calibration,
     normalize_stream_url,
+    publication_rejection_reasons,
     prune_stale_worker_files,
+    write_status,
 )
 
 
@@ -29,6 +32,7 @@ class LiveStreamWorkerTest(unittest.TestCase):
 
         self.assertEqual(calibration["analysis_resolution"], [640, 360])
         self.assertEqual(calibration["pose_visibility_threshold"], 0.45)
+        self.assertEqual(calibration["person_detection_confidence"], 0.45)
         self.assertEqual(calibration["start_dwell_seconds"], 0.8)
         self.assertEqual(calibration["start_confirmation_window_seconds"], 5.0)
         self.assertNotIn("route_id", calibration)
@@ -103,10 +107,48 @@ class LiveStreamWorkerTest(unittest.TestCase):
 
             self.assertFalse(video.exists())
             self.assertFalse(output.exists())
+            audit = root / "discarded-attempts" / "live-001.json"
+            self.assertTrue(audit.exists())
+            self.assertIn("UNASSIGNED_ATTEMPT", audit.read_text(encoding="utf-8"))
 
     def test_only_confirmed_start_can_be_published(self) -> None:
         self.assertFalse(has_confirmed_start({"result": {"started_at_s": None}}))
         self.assertTrue(has_confirmed_start({"result": {"started_at_s": 12.5}}))
+
+    def test_final_guard_rejects_a_pose_without_foreground_person(self) -> None:
+        calibration = {
+            "publication_min_valid_person_seconds": 1.5,
+            "publication_min_image_quality_ratio": 0.6,
+        }
+        result = {
+            "result": {"started_at_s": 4.2},
+            "processing": {
+                "max_valid_person_streak_s": 2.0,
+                "foreground_confirmed_frames": 0,
+                "image_quality_accepted_ratio": 1.0,
+            },
+        }
+
+        self.assertEqual(
+            publication_rejection_reasons(result, calibration),
+            ["NO_FOREGROUND_PERSON"],
+        )
+
+    def test_final_guard_accepts_a_confirmed_valid_track(self) -> None:
+        calibration = {
+            "publication_min_valid_person_seconds": 1.5,
+            "publication_min_image_quality_ratio": 0.6,
+        }
+        result = {
+            "result": {"started_at_s": 4.2},
+            "processing": {
+                "max_valid_person_streak_s": 2.0,
+                "foreground_confirmed_frames": 16,
+                "image_quality_accepted_ratio": 1.0,
+            },
+        }
+
+        self.assertEqual(publication_rejection_reasons(result, calibration), [])
 
     def test_calculates_video_checksum_without_loading_entire_file(self) -> None:
         with TemporaryDirectory() as directory:
@@ -117,6 +159,21 @@ class LiveStreamWorkerTest(unittest.TestCase):
                 file_sha256(video),
                 "f5cee54fb1838c897dd490afc0f2eb07e1b69487179819a8a9331f082db19a0c",
             )
+
+    def test_status_distinguishes_connected_stream_from_paused_recognition(self) -> None:
+        with TemporaryDirectory() as directory:
+            output = Path(directory)
+            write_status(
+                output,
+                "ONLINE",
+                "画面质量不满足识别条件",
+                route_definition_count=2,
+                recognition_state="PAUSED_IMAGE_QUALITY",
+            )
+
+            payload = json.loads((output / "status.json").read_text(encoding="utf-8"))
+            self.assertEqual(payload["status"], "ONLINE")
+            self.assertEqual(payload["recognitionState"], "PAUSED_IMAGE_QUALITY")
 
     def test_prunes_only_expired_temporary_files(self) -> None:
         with TemporaryDirectory() as directory:
