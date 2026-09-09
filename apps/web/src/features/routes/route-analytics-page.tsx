@@ -5,11 +5,11 @@ import { PageHeading, SectionCard } from '../dashboard/page-components';
 import { climbingColorCss, climbingColorLabel } from '../common/climbing-colors';
 import {
   getRouteAnalytics,
-  routePhotoUrl,
   type OperationalRoute,
   type RouteAnalytics,
   type RouteAnalyticsItem,
 } from './route-operations-api';
+import { RoutePhotoPreview } from './route-photo-preview';
 import styles from './routes.module.css';
 
 export function RouteAnalyticsPage({
@@ -73,9 +73,7 @@ function RouteReviewOverview({ route }: { route: OperationalRoute }) {
     <section className={styles.reviewOverview}>
       <div className={styles.reviewPhoto}>
         {route.version?.hasPhoto ? (
-          // Authenticated same-origin image; the browser sends the session cookie.
-          // eslint-disable-next-line @next/next/no-img-element
-          <img src={routePhotoUrl(route.id)} alt={`${route.name} 线路`} />
+          <RoutePhotoPreview route={route} />
         ) : (
           <div className={styles.reviewPhotoEmpty}>
             <span style={{ background: climbingColorCss(route.color) }} />
