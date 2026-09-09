@@ -3,7 +3,7 @@
 import Image from 'next/image';
 import QRCode from 'qrcode';
 import { useEffect, useMemo, useState, type FormEvent } from 'react';
-import { PageHeading, SectionCard, StatGrid, StatusBadge } from '../dashboard/page-components';
+import { PageHeading, SectionCard, StatusBadge } from '../dashboard/page-components';
 import {
   climbingColorCss,
   climbingColorLabel,
@@ -33,7 +33,6 @@ export function RouteOperationsPage() {
   const [context, setContext] = useState<RouteContext>({ areas: [], setters: [] });
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState('');
-  const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState<OperationalRoute | null>(null);
   const [qrRoute, setQrRoute] = useState<OperationalRoute | null>(null);
   const [analyticsRoute, setAnalyticsRoute] = useState<OperationalRoute | null>(null);
@@ -76,7 +75,6 @@ export function RouteOperationsPage() {
 
   function edit(route: OperationalRoute) {
     setEditing(route);
-    setShowForm(true);
   }
 
   if (analyticsRoute)
@@ -85,86 +83,124 @@ export function RouteOperationsPage() {
   return (
     <div className="page-stack">
       <PageHeading
-        eyebrow="第一阶段 · 线路数字化"
+        eyebrow="线路管理"
         title="线路库"
-        description="浏览、查询和维护从真实墙面视觉配置创建的线路。"
-      />
-      <StatGrid
-        items={[
-          { label: '正常线路', value: String(active), detail: 'Worker 当前可用', tone: 'accent' },
-          { label: '已停用线路', value: String(inactive), detail: '可恢复或删除' },
-          { label: '二维码反馈', value: String(feedback), detail: '主动反馈样本，不等于真实客流' },
-          {
-            label: '墙段档案',
-            value: String(context.areas.flatMap((area) => area.segments).length),
-            detail: '可支持跨相邻墙段',
-          },
-        ]}
+        description="查找线路、查看反馈，并维护每条线路的基本信息。"
       />
       {message && <p className="team-feedback is-error">{message}</p>}
-      {showForm && editing && (
+      <div className={styles.libraryLayout}>
+        <main className={styles.libraryMain}>
+          <SectionCard title="线路档案" description={`${visibleRoutes.length} 条线路`}>
+            <div className={styles.catalogTools}>
+              <input
+                aria-label="搜索线路"
+                value={routeQuery}
+                placeholder="搜索编号、名称、难度或颜色"
+                onChange={(event) => setRouteQuery(event.target.value)}
+              />
+              <select
+                aria-label="线路状态"
+                value={statusFilter}
+                onChange={(event) =>
+                  setStatusFilter(event.target.value as 'ALL' | 'PUBLISHED' | 'INACTIVE')
+                }
+              >
+                <option value="ALL">全部状态</option>
+                <option value="PUBLISHED">正常</option>
+                <option value="INACTIVE">已停用</option>
+              </select>
+            </div>
+            {loading ? (
+              <p className={styles.empty}>正在读取线路…</p>
+            ) : visibleRoutes.length ? (
+              <div className={styles.routeGrid}>
+                {visibleRoutes.map((route) => (
+                  <RouteCard
+                    key={route.id}
+                    route={route}
+                    onEdit={() => edit(route)}
+                    onQr={() => setQrRoute(route)}
+                    onAnalytics={() => setAnalyticsRoute(route)}
+                    onChanged={refresh}
+                    onError={setMessage}
+                  />
+                ))}
+              </div>
+            ) : routes.length ? (
+              <div className={styles.emptyState}>
+                <strong>没有匹配的线路</strong>
+                <p>请调整搜索条件或状态筛选。</p>
+              </div>
+            ) : (
+              <div className={styles.emptyState}>
+                <strong>还没有线路档案</strong>
+                <p>请前往“视频识别”，根据真实墙面创建第一条线路。</p>
+              </div>
+            )}
+          </SectionCard>
+        </main>
+        <aside className={styles.libraryAside}>
+          <RouteLibrarySummary
+            active={active}
+            inactive={inactive}
+            feedback={feedback}
+            segments={context.areas.flatMap((area) => area.segments).length}
+          />
+        </aside>
+      </div>
+      {editing && (
         <RouteEditor
           context={context}
           initial={editing}
-          onCancel={() => setShowForm(false)}
+          onCancel={() => setEditing(null)}
           onSaved={async () => {
-            setShowForm(false);
+            setEditing(null);
             await refresh();
           }}
           onWallCreated={refresh}
         />
       )}
-      <SectionCard
-        title="线路档案"
-        description="颜色只用于识别；线路编号和发布版本才是数据归属依据。"
-      >
-        <div className={styles.catalogTools}>
-          <input
-            value={routeQuery}
-            placeholder="搜索编号、名称、难度或颜色"
-            onChange={(event) => setRouteQuery(event.target.value)}
-          />
-          <select
-            value={statusFilter}
-            onChange={(event) =>
-              setStatusFilter(event.target.value as 'ALL' | 'PUBLISHED' | 'INACTIVE')
-            }
-          >
-            <option value="ALL">全部状态</option>
-            <option value="PUBLISHED">正常</option>
-            <option value="INACTIVE">已停用</option>
-          </select>
-        </div>
-        {loading ? (
-          <p className={styles.empty}>正在读取线路…</p>
-        ) : visibleRoutes.length ? (
-          <div className={styles.routeGrid}>
-            {visibleRoutes.map((route) => (
-              <RouteCard
-                key={route.id}
-                route={route}
-                onEdit={() => edit(route)}
-                onQr={() => setQrRoute(route)}
-                onAnalytics={() => setAnalyticsRoute(route)}
-                onChanged={refresh}
-                onError={setMessage}
-              />
-            ))}
-          </div>
-        ) : routes.length ? (
-          <div className={styles.emptyState}>
-            <strong>没有匹配的线路</strong>
-            <p>请调整搜索条件或状态筛选。</p>
-          </div>
-        ) : (
-          <div className={styles.emptyState}>
-            <strong>还没有线路档案</strong>
-            <p>请前往“视频识别”，根据真实墙面完成视觉标注并创建线路。</p>
-          </div>
-        )}
-      </SectionCard>
       {qrRoute?.publicToken && <QrDialog route={qrRoute} onClose={() => setQrRoute(null)} />}
     </div>
+  );
+}
+
+function RouteLibrarySummary({
+  active,
+  inactive,
+  feedback,
+  segments,
+}: {
+  active: number;
+  inactive: number;
+  feedback: number;
+  segments: number;
+}) {
+  return (
+    <section className={styles.librarySummary}>
+      <header>
+        <span>线路概况</span>
+        <b>{active + inactive} 条线路</b>
+      </header>
+      <dl>
+        <div>
+          <dt>正常</dt>
+          <dd>{active} 条</dd>
+        </div>
+        <div>
+          <dt>已停用</dt>
+          <dd>{inactive} 条</dd>
+        </div>
+        <div>
+          <dt>扫码反馈</dt>
+          <dd>{feedback} 份</dd>
+        </div>
+        <div>
+          <dt>墙段</dt>
+          <dd>{segments} 个</dd>
+        </div>
+      </dl>
+    </section>
   );
 }
 
@@ -423,6 +459,14 @@ function RouteEditor({
     context.areas.flatMap((area) => area.segments).length === 0,
   );
 
+  useEffect(() => {
+    function closeOnEscape(event: KeyboardEvent) {
+      if (event.key === 'Escape' && !saving) onCancel();
+    }
+    window.addEventListener('keydown', closeOnEscape);
+    return () => window.removeEventListener('keydown', closeOnEscape);
+  }, [onCancel, saving]);
+
   async function submit(event: FormEvent) {
     event.preventDefault();
     setSaving(true);
@@ -453,170 +497,198 @@ function RouteEditor({
   );
 
   return (
-    <SectionCard
-      title={`编辑线路 ${initial.code}`}
-      description="线路编号由系统生成；修改颜色、难度或墙段时请确认视觉定义仍然有效。"
+    <div
+      className={styles.dialogBackdrop}
+      role="presentation"
+      onMouseDown={(event) => {
+        if (event.target === event.currentTarget && !saving) onCancel();
+      }}
     >
-      <form className={styles.editor} onSubmit={submit}>
-        <div className={styles.formGrid}>
-          <label>
-            线路编号
-            <input
-              required
-              disabled
-              maxLength={64}
-              value={form.code}
-              placeholder="例如 R-027"
-              onChange={(event) => setForm({ ...form, code: event.target.value })}
-            />
-          </label>
-          <label>
-            线路名称
-            <input
-              required
-              maxLength={80}
-              value={form.name}
-              placeholder="例如 晨雾"
-              onChange={(event) => setForm({ ...form, name: event.target.value })}
-            />
-          </label>
-          <label>
-            预计难度
-            <input
-              required
-              maxLength={32}
-              value={form.grade}
-              placeholder="V3"
-              onChange={(event) => setForm({ ...form, grade: event.target.value })}
-            />
-          </label>
-          <label>
-            评级体系
-            <input
-              required
-              maxLength={32}
-              value={form.gradeSystem}
-              placeholder="V / 法式 / YDS"
-              onChange={(event) => setForm({ ...form, gradeSystem: event.target.value })}
-            />
-          </label>
-          <label>
-            线路颜色
-            <select
-              value={form.color}
-              onChange={(event) => setForm({ ...form, color: event.target.value as ClimbingColor })}
-            >
-              {climbingColorOptions.map(({ value, label }) => (
-                <option key={value} value={value}>
-                  {label}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label>
-            主要定线员
-            <select
-              value={form.setterMembershipId ?? ''}
-              onChange={(event) =>
-                setForm({ ...form, setterMembershipId: event.target.value || null })
-              }
-            >
-              <option value="">暂不填写</option>
-              {context.setters.map((setter) => (
-                <option key={setter.id} value={setter.id}>
-                  {setter.displayName ?? '未命名员工'}
-                  {setter.jobTitle ? ` · ${setter.jobTitle}` : ''}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label>
-            风格标签
-            <input
-              value={tagText}
-              placeholder="平衡，脚法，动态"
-              onChange={(event) => setTagText(event.target.value)}
-            />
-          </label>
-          <label>
-            预计拆线日期
-            <input
-              type="date"
-              value={form.expectedRetireAt?.slice(0, 10) ?? ''}
-              onChange={(event) =>
-                setForm({ ...form, expectedRetireAt: event.target.value || null })
-              }
-            />
-          </label>
-        </div>
-        <fieldset className={styles.wallChoices}>
-          <legend>所在墙段（可多选）</legend>
-          {segments.length ? (
-            segments.map((segment) => (
-              <label key={segment.id}>
-                <input
-                  type="checkbox"
-                  checked={form.wallSegmentIds.includes(segment.id)}
-                  onChange={(event) =>
-                    setForm({
-                      ...form,
-                      wallSegmentIds: event.target.checked
-                        ? [...form.wallSegmentIds, segment.id]
-                        : form.wallSegmentIds.filter((id) => id !== segment.id),
-                    })
-                  }
-                />
-                <span>
-                  <strong>{segment.code}</strong>
-                  {segment.areaName} · {segment.name}
-                </span>
-              </label>
-            ))
-          ) : (
-            <p>还没有墙段，请先建立轻量墙段档案。</p>
-          )}
+      <section
+        aria-label={`编辑线路 ${initial.code}`}
+        aria-modal="true"
+        className={styles.routeEditorDialog}
+        role="dialog"
+      >
+        <header className={styles.routeEditorHeader}>
+          <div>
+            <small>编辑线路</small>
+            <h2>{initial.code}</h2>
+            <p>修改线路名称、难度、墙段和展示图片。</p>
+          </div>
           <button
-            className={styles.textButton}
+            aria-label="关闭编辑窗口"
+            className={styles.dialogClose}
+            disabled={saving}
             type="button"
-            onClick={() => setShowWall((value) => !value)}
+            onClick={onCancel}
           >
-            {showWall ? '收起墙段创建' : '新增墙段'}
+            ×
           </button>
-        </fieldset>
-        {showWall && <WallCreator onCreated={onWallCreated} />}
-        <label>
-          线路说明
-          <textarea
-            maxLength={500}
-            value={form.description ?? ''}
-            placeholder="起步说明、风格或运营备注"
-            onChange={(event) => setForm({ ...form, description: event.target.value })}
-          />
-        </label>
-        <label>
-          线路照片（可在发布前补充）
-          <input
-            accept="image/jpeg,image/png,image/webp"
-            type="file"
-            onChange={(event) => setPhoto(event.target.files?.[0] ?? null)}
-          />
-          <small>支持 JPEG、PNG、WebP，最大 10 MB。照片用于会员确认线路，不要求 GLB。</small>
-        </label>
-        {error && <p className="team-feedback is-error">{error}</p>}
-        <div className={styles.formActions}>
-          <button className={styles.secondaryButton} type="button" onClick={onCancel}>
-            取消
-          </button>
-          <button
-            className={styles.primaryButton}
-            disabled={saving || form.wallSegmentIds.length === 0}
-            type="submit"
-          >
-            {saving ? '保存中…' : '保存线路信息'}
-          </button>
-        </div>
-      </form>
-    </SectionCard>
+        </header>
+        <form className={styles.editor} onSubmit={submit}>
+          <div className={styles.formGrid}>
+            <label>
+              线路编号
+              <input
+                required
+                disabled
+                maxLength={64}
+                value={form.code}
+                placeholder="例如 R-027"
+                onChange={(event) => setForm({ ...form, code: event.target.value })}
+              />
+            </label>
+            <label>
+              线路名称
+              <input
+                required
+                maxLength={80}
+                value={form.name}
+                placeholder="例如 晨雾"
+                onChange={(event) => setForm({ ...form, name: event.target.value })}
+              />
+            </label>
+            <label>
+              预计难度
+              <input
+                required
+                maxLength={32}
+                value={form.grade}
+                placeholder="V3"
+                onChange={(event) => setForm({ ...form, grade: event.target.value })}
+              />
+            </label>
+            <label>
+              评级体系
+              <input
+                required
+                maxLength={32}
+                value={form.gradeSystem}
+                placeholder="V / 法式 / YDS"
+                onChange={(event) => setForm({ ...form, gradeSystem: event.target.value })}
+              />
+            </label>
+            <label>
+              线路颜色
+              <select
+                value={form.color}
+                onChange={(event) =>
+                  setForm({ ...form, color: event.target.value as ClimbingColor })
+                }
+              >
+                {climbingColorOptions.map(({ value, label }) => (
+                  <option key={value} value={value}>
+                    {label}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label>
+              主要定线员
+              <select
+                value={form.setterMembershipId ?? ''}
+                onChange={(event) =>
+                  setForm({ ...form, setterMembershipId: event.target.value || null })
+                }
+              >
+                <option value="">暂不填写</option>
+                {context.setters.map((setter) => (
+                  <option key={setter.id} value={setter.id}>
+                    {setter.displayName ?? '未命名员工'}
+                    {setter.jobTitle ? ` · ${setter.jobTitle}` : ''}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label>
+              风格标签
+              <input
+                value={tagText}
+                placeholder="平衡，脚法，动态"
+                onChange={(event) => setTagText(event.target.value)}
+              />
+            </label>
+            <label>
+              预计拆线日期
+              <input
+                type="date"
+                value={form.expectedRetireAt?.slice(0, 10) ?? ''}
+                onChange={(event) =>
+                  setForm({ ...form, expectedRetireAt: event.target.value || null })
+                }
+              />
+            </label>
+          </div>
+          <fieldset className={styles.wallChoices}>
+            <legend>所在墙段（可多选）</legend>
+            {segments.length ? (
+              segments.map((segment) => (
+                <label key={segment.id}>
+                  <input
+                    type="checkbox"
+                    checked={form.wallSegmentIds.includes(segment.id)}
+                    onChange={(event) =>
+                      setForm({
+                        ...form,
+                        wallSegmentIds: event.target.checked
+                          ? [...form.wallSegmentIds, segment.id]
+                          : form.wallSegmentIds.filter((id) => id !== segment.id),
+                      })
+                    }
+                  />
+                  <span>
+                    <strong>{segment.code}</strong>
+                    {segment.areaName} · {segment.name}
+                  </span>
+                </label>
+              ))
+            ) : (
+              <p>还没有墙段，请先建立轻量墙段档案。</p>
+            )}
+            <button
+              className={styles.textButton}
+              type="button"
+              onClick={() => setShowWall((value) => !value)}
+            >
+              {showWall ? '收起墙段创建' : '新增墙段'}
+            </button>
+          </fieldset>
+          {showWall && <WallCreator onCreated={onWallCreated} />}
+          <label>
+            线路说明
+            <textarea
+              maxLength={500}
+              value={form.description ?? ''}
+              placeholder="起步说明、风格或运营备注"
+              onChange={(event) => setForm({ ...form, description: event.target.value })}
+            />
+          </label>
+          <label>
+            线路照片（可在发布前补充）
+            <input
+              accept="image/jpeg,image/png,image/webp"
+              type="file"
+              onChange={(event) => setPhoto(event.target.files?.[0] ?? null)}
+            />
+            <small>支持 JPEG、PNG、WebP，最大 10 MB。照片用于会员确认线路，不要求 GLB。</small>
+          </label>
+          {error && <p className="team-feedback is-error">{error}</p>}
+          <div className={styles.formActions}>
+            <button className={styles.secondaryButton} type="button" onClick={onCancel}>
+              取消
+            </button>
+            <button
+              className={styles.primaryButton}
+              disabled={saving || form.wallSegmentIds.length === 0}
+              type="submit"
+            >
+              {saving ? '保存中…' : '保存线路信息'}
+            </button>
+          </div>
+        </form>
+      </section>
+    </div>
   );
 }
 
