@@ -18,7 +18,6 @@ import {
   publishOperationalRoute,
   retireOperationalRoute,
   restoreOperationalRoute,
-  routePhotoUrl,
   updateOperationalRoute,
   uploadRoutePhoto,
   type OperationalRoute,
@@ -27,6 +26,7 @@ import {
 } from './route-operations-api';
 import styles from './routes.module.css';
 import { RouteAnalyticsPage } from './route-analytics-page';
+import { RoutePhotoPreview } from './route-photo-preview';
 
 export function RouteOperationsPage() {
   const [routes, setRoutes] = useState<OperationalRoute[]>([]);
@@ -88,66 +88,60 @@ export function RouteOperationsPage() {
         description="查找线路、查看反馈，并维护每条线路的基本信息。"
       />
       {message && <p className="team-feedback is-error">{message}</p>}
-      <div className={styles.libraryLayout}>
-        <main className={styles.libraryMain}>
-          <SectionCard title="线路档案" description={`${visibleRoutes.length} 条线路`}>
-            <div className={styles.catalogTools}>
-              <input
-                aria-label="搜索线路"
-                value={routeQuery}
-                placeholder="搜索编号、名称、难度或颜色"
-                onChange={(event) => setRouteQuery(event.target.value)}
-              />
-              <select
-                aria-label="线路状态"
-                value={statusFilter}
-                onChange={(event) =>
-                  setStatusFilter(event.target.value as 'ALL' | 'PUBLISHED' | 'INACTIVE')
-                }
-              >
-                <option value="ALL">全部状态</option>
-                <option value="PUBLISHED">正常</option>
-                <option value="INACTIVE">已停用</option>
-              </select>
-            </div>
-            {loading ? (
-              <p className={styles.empty}>正在读取线路…</p>
-            ) : visibleRoutes.length ? (
-              <div className={styles.routeGrid}>
-                {visibleRoutes.map((route) => (
-                  <RouteCard
-                    key={route.id}
-                    route={route}
-                    onEdit={() => edit(route)}
-                    onQr={() => setQrRoute(route)}
-                    onAnalytics={() => setAnalyticsRoute(route)}
-                    onChanged={refresh}
-                    onError={setMessage}
-                  />
-                ))}
-              </div>
-            ) : routes.length ? (
-              <div className={styles.emptyState}>
-                <strong>没有匹配的线路</strong>
-                <p>请调整搜索条件或状态筛选。</p>
-              </div>
-            ) : (
-              <div className={styles.emptyState}>
-                <strong>还没有线路档案</strong>
-                <p>请前往“视频识别”，根据真实墙面创建第一条线路。</p>
-              </div>
-            )}
-          </SectionCard>
-        </main>
-        <aside className={styles.libraryAside}>
-          <RouteLibrarySummary
-            active={active}
-            inactive={inactive}
-            feedback={feedback}
-            segments={context.areas.flatMap((area) => area.segments).length}
+      <RouteLibrarySummary
+        active={active}
+        inactive={inactive}
+        feedback={feedback}
+        segments={context.areas.flatMap((area) => area.segments).length}
+      />
+      <SectionCard title="线路档案" description={`${visibleRoutes.length} 条线路`}>
+        <div className={styles.catalogTools}>
+          <input
+            aria-label="搜索线路"
+            value={routeQuery}
+            placeholder="搜索编号、名称、难度或颜色"
+            onChange={(event) => setRouteQuery(event.target.value)}
           />
-        </aside>
-      </div>
+          <select
+            aria-label="线路状态"
+            value={statusFilter}
+            onChange={(event) =>
+              setStatusFilter(event.target.value as 'ALL' | 'PUBLISHED' | 'INACTIVE')
+            }
+          >
+            <option value="ALL">全部状态</option>
+            <option value="PUBLISHED">正常</option>
+            <option value="INACTIVE">已停用</option>
+          </select>
+        </div>
+        {loading ? (
+          <p className={styles.empty}>正在读取线路…</p>
+        ) : visibleRoutes.length ? (
+          <div className={styles.routeGrid}>
+            {visibleRoutes.map((route) => (
+              <RouteCard
+                key={route.id}
+                route={route}
+                onEdit={() => edit(route)}
+                onQr={() => setQrRoute(route)}
+                onAnalytics={() => setAnalyticsRoute(route)}
+                onChanged={refresh}
+                onError={setMessage}
+              />
+            ))}
+          </div>
+        ) : routes.length ? (
+          <div className={styles.emptyState}>
+            <strong>没有匹配的线路</strong>
+            <p>请调整搜索条件或状态筛选。</p>
+          </div>
+        ) : (
+          <div className={styles.emptyState}>
+            <strong>还没有线路档案</strong>
+            <p>请前往“视频识别”，根据真实墙面创建第一条线路。</p>
+          </div>
+        )}
+      </SectionCard>
       {editing && (
         <RouteEditor
           context={context}
@@ -356,73 +350,6 @@ function RouteCard({
         )}
       </div>
     </article>
-  );
-}
-
-function RoutePhotoPreview({ route }: { route: OperationalRoute }) {
-  const [open, setOpen] = useState(false);
-  const photoUrl = routePhotoUrl(route.id);
-
-  useEffect(() => {
-    if (!open) return;
-    function closeOnEscape(event: KeyboardEvent) {
-      if (event.key === 'Escape') setOpen(false);
-    }
-    window.addEventListener('keydown', closeOnEscape);
-    return () => window.removeEventListener('keydown', closeOnEscape);
-  }, [open]);
-
-  return (
-    <>
-      <div className={styles.routePhotoFrame}>
-        <button
-          aria-haspopup="dialog"
-          aria-label={`查看 ${route.name} 的完整线路截图`}
-          className={styles.routePhotoButton}
-          type="button"
-          onClick={() => setOpen(true)}
-        >
-          {/* Authenticated same-origin image; the browser sends the session cookie. */}
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img className={styles.routePhoto} src={photoUrl} alt={`${route.name} 线路`} />
-          <span className={styles.routePhotoHint}>查看完整截图</span>
-        </button>
-      </div>
-      {open && (
-        <div
-          className={styles.dialogBackdrop}
-          role="presentation"
-          onMouseDown={(event) => {
-            if (event.target === event.currentTarget) setOpen(false);
-          }}
-        >
-          <section
-            aria-label={`${route.name} 完整线路截图`}
-            aria-modal="true"
-            className={styles.photoDialog}
-            role="dialog"
-          >
-            <button
-              aria-label="关闭完整线路截图"
-              className={styles.dialogClose}
-              type="button"
-              onClick={() => setOpen(false)}
-            >
-              ×
-            </button>
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              className={styles.routePhotoFull}
-              src={photoUrl}
-              alt={`${route.name} 完整线路截图`}
-            />
-            <p>
-              {route.code} · {route.name}
-            </p>
-          </section>
-        </div>
-      )}
-    </>
   );
 }
 

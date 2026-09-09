@@ -35,23 +35,9 @@
   opacity: 0.55;
 }
 
-.libraryLayout {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) 250px;
-  align-items: start;
-  gap: 18px;
-}
-
-.libraryMain {
-  min-width: 0;
-}
-
-.libraryAside {
-  position: sticky;
-  top: 92px;
-}
-
 .librarySummary {
+  display: grid;
+  grid-template-columns: 190px minmax(0, 1fr);
   overflow: hidden;
   border: 1px solid rgb(226 229 223 / 78%);
   border-radius: 16px;
@@ -61,9 +47,10 @@
 
 .librarySummary header {
   display: grid;
+  align-content: center;
   gap: 4px;
-  padding: 16px;
-  border-bottom: 1px solid #edf0ed;
+  padding: 16px 20px;
+  border-right: 1px solid #edf0ed;
 }
 
 .librarySummary header span,
@@ -74,40 +61,37 @@
 
 .librarySummary header b {
   color: #294d3e;
-  font-size: 15px;
+  font-size: 19px;
 }
 
 .librarySummary dl {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   margin: 0;
 }
 
 .librarySummary dl > div {
-  padding: 13px 16px;
+  display: grid;
+  align-content: center;
+  padding: 15px 20px;
   border-right: 1px solid #edf0ed;
-  border-bottom: 1px solid #edf0ed;
 }
 
-.librarySummary dl > div:nth-child(even) {
+.librarySummary dl > div:last-child {
   border-right: 0;
-}
-
-.librarySummary dl > div:nth-last-child(-n + 2) {
-  border-bottom: 0;
 }
 
 .librarySummary dd {
   margin: 4px 0 0;
   color: #263b31;
-  font-size: 14px;
+  font-size: 16px;
   font-weight: 800;
 }
 
 .routeGrid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
-  gap: 16px;
+  grid-template-columns: repeat(auto-fill, minmax(270px, 1fr));
+  gap: 14px;
   padding: 20px;
 }
 
@@ -133,8 +117,8 @@
 .routeCard {
   display: grid;
   align-content: start;
-  gap: 16px;
-  padding: 20px;
+  gap: 14px;
+  padding: 18px;
   border: 1px solid #dde5e0;
   border-radius: 16px;
   background: #fbfcfa;
@@ -235,10 +219,11 @@
 }
 
 .reviewOverview {
-  min-height: 240px;
   display: grid;
-  grid-template-columns: minmax(300px, 1.2fr) minmax(260px, 0.8fr);
+  grid-template-columns: minmax(220px, 320px) minmax(0, 1fr);
+  gap: 22px;
   overflow: hidden;
+  padding: 18px;
   border: 1px solid rgb(226 229 223 / 78%);
   border-radius: 18px;
   background: var(--dashboard-panel);
@@ -247,19 +232,14 @@
 
 .reviewPhoto {
   min-width: 0;
+  overflow: hidden;
+  border-radius: 12px;
   background: #edf2ef;
 }
 
-.reviewPhoto img,
 .reviewPhotoEmpty {
   width: 100%;
-  height: 100%;
-  min-height: 240px;
-}
-
-.reviewPhoto img {
-  display: block;
-  object-fit: cover;
+  aspect-ratio: 16 / 9;
 }
 
 .reviewPhotoEmpty {
@@ -289,7 +269,7 @@
   display: grid;
   align-content: center;
   gap: 5px;
-  padding: 28px;
+  padding: 8px 18px 8px 0;
 }
 
 .reviewOverviewCopy > small {
@@ -312,7 +292,7 @@
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 14px;
-  margin: 22px 0 0;
+  margin: 14px 0 0;
 }
 
 .reviewOverviewCopy dt {
@@ -783,20 +763,15 @@
 }
 
 @media (max-width: 980px) {
-  .libraryLayout {
+  .librarySummary {
     grid-template-columns: 1fr;
   }
-  .libraryAside {
-    position: static;
-    grid-row: 1;
+
+  .librarySummary header {
+    border-right: 0;
+    border-bottom: 1px solid #edf0ed;
   }
-  .reviewOverview {
-    grid-template-columns: 1fr;
-  }
-  .reviewPhoto img,
-  .reviewPhotoEmpty {
-    max-height: 360px;
-  }
+
   .formGrid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
@@ -822,6 +797,21 @@
   .routeGrid {
     grid-template-columns: 1fr;
     padding: 12px;
+  }
+  .librarySummary dl {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .librarySummary dl > div:nth-child(2) {
+    border-right: 0;
+  }
+  .librarySummary dl > div:nth-child(-n + 2) {
+    border-bottom: 1px solid #edf0ed;
+  }
+  .reviewOverview {
+    grid-template-columns: 1fr;
+  }
+  .reviewOverviewCopy {
+    padding: 4px 2px 8px;
   }
   .routeFacts {
     grid-template-columns: 1fr;
