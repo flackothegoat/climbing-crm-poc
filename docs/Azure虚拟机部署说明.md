@@ -26,7 +26,7 @@
 - 自动关机：每天 23:00（中国标准时间），提前 30 分钟邮件通知
 - 资源组月预算：150 USD；实际费用 50%、80%、100% 和预测费用 100% 时发送邮件告警
 
-2026-09-11 发布前检查确认 Prisma 识别到 31 个迁移且生产 schema 已是最新状态。Web、API、PostgreSQL、MinIO、Caddy 均由 Docker Compose 管理，并使用 `unless-stopped` 重启策略。视觉服务使用独立 Compose 项目，Docker 服务随虚拟机启动。
+2026-09-11 发布前检查确认生产环境已应用 31 个 Prisma 迁移；`release-2026-09-11` 发布时又应用 2 个识别复核与录像证据迁移，当前共 33 个且 schema 已是最新状态。Web、API、PostgreSQL、MinIO、Caddy 均由 Docker Compose 管理，并使用 `unless-stopped` 重启策略。视觉服务使用独立 Compose 项目，Docker 服务随虚拟机启动。本次发布详情见 [2026-09-11 正式发布记录](./发布记录-2026-09-11.md)。
 
 ## 生产环境文件
 
