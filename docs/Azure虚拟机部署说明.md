@@ -26,7 +26,7 @@
 - 自动关机：每天 23:00（中国标准时间），提前 30 分钟邮件通知
 - 资源组月预算：150 USD；实际费用 50%、80%、100% 和预测费用 100% 时发送邮件告警
 
-生产环境已完成 12 个 Prisma 数据库迁移。Web、API、PostgreSQL、MinIO、Caddy 均由 Docker Compose 管理，并使用 `unless-stopped` 重启策略。Docker 服务随虚拟机启动。
+2026-09-11 发布前检查确认 Prisma 识别到 31 个迁移且生产 schema 已是最新状态。Web、API、PostgreSQL、MinIO、Caddy 均由 Docker Compose 管理，并使用 `unless-stopped` 重启策略。视觉服务使用独立 Compose 项目，Docker 服务随虚拟机启动。
 
 ## 生产环境文件
 
@@ -132,7 +132,7 @@ curl https://galsync-climbing-demo-01.southeastasia.cloudapp.azure.com/backend/h
 1. 打开 `vm-climbing-demo-01-nsg`。
 2. 进入 `Inbound security rules`。
 3. 删除 `AllowSSHTemporary`。
-4. 确认自定义公网入站规则只剩 `AllowHTTP`（80）和 `AllowHTTPS`（443）。
+4. 确认已删除 SSH 临时规则。GB28181 SIP/RTP 场馆白名单是业务必需规则，应保留且只允许已确认的场馆 `/32` 公网地址。
 
 ## 全新服务器的首次部署
 
@@ -190,13 +190,38 @@ curl https://galsync-climbing-demo-01.southeastasia.cloudapp.azure.com/backend/h
 
 ## 更新
 
-将新代码同步到服务器后执行：
+应用发布必须使用已通过本地验证的确切 Git commit 生成仅含跟踪文件的发布包，不把 `.git`、`.env`、`node_modules`、本地录像和备份上传。服务器保留现有 `.env.production`，将发布 commit 写入 `/opt/climbing-demo/DEPLOYED_COMMIT`。
+
+建议通过 `infra/deploy-production.sh` 完成主应用备份、构建、migration 和健康检查：
 
 ```bash
-sudo docker compose --env-file .env.production -f infra/compose.production.yaml build
-sudo docker compose --env-file .env.production -f infra/compose.production.yaml run --rm api pnpm --filter @climbing-crm/api prisma migrate deploy
-sudo docker compose --env-file .env.production -f infra/compose.production.yaml up -d
+sudo /opt/climbing-demo/infra/deploy-production.sh \
+  /opt/climbing-demo \
+  galsync-climbing-demo-01.southeastasia.cloudapp.azure.com
+
+sudo /opt/climbing-demo/infra/deploy-vision-worker.sh \
+  /opt/climbing-demo \
+  <岩馆组织 ID> \
+  /opt/climbing-vision-worker
 ```
+
+如果维护端网络禁止 SSH，可使用 Azure VM Run Command 执行同一个发布脚本；发布包下载凭据必须短时、只读并作为受保护参数传入，验证后删除临时 Blob。
+
+发布后至少确认：
+
+- `DEPLOYED_COMMIT` 与本地发布标签指向同一 commit。
+- PostgreSQL 备份位于 `/opt/climbing-demo/deployment-backups/`，且 `prisma migrate status` 无待执行迁移。
+- API、Web、PostgreSQL 健康，Caddy 和 MinIO 运行。
+- 视觉 Worker 健康且能读取已发布线路定义。
+- 公网首页、`/backend/health`、WVP 界面和媒体字节探测符合预期。
+
+## 回退边界
+
+发布前保留上一版应用目录和 PostgreSQL 压缩备份。代码或容器问题可切回上一目录并重建；数据库迁移不得自动倒放。如果新 migration 已写入生产数据，必须先评估前后兼容性和数据影响，再决定是修复向前还是从备份恢复。
+
+## 场馆动态公网 IP
+
+GB28181 入站当前仍使用 Azure NSG `/32` 场馆白名单。场馆地址变化会导致注册或推流中断；在自动化方案通过 HMAC、防重放、设备绑定、最小权限和端到端验收前，只能人工确认新公网 IP 后再更新，不能将 SIP/RTP 来源放宽为 Internet。
 
 ## 数据备份
 
