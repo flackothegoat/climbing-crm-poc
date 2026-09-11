@@ -14,7 +14,7 @@ COPY requirements.txt ./
 RUN pip install --no-cache-dir -r requirements.txt \
     && pip install --no-cache-dir --no-deps ultralytics==8.4.115
 
-COPY attempt_gate.py analyze_climb_video.py live_stream_worker.py worker_healthcheck.py ./
+COPY attempt_gate.py analyze_climb_video.py live_stream_worker.py visual_guard.py worker_healthcheck.py ./
 COPY worker-defaults.json ./worker-defaults.json
 COPY models/yolo11n-pose.pt ./models/yolo11n-pose.pt
 
