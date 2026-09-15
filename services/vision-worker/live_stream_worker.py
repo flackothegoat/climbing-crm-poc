@@ -68,6 +68,14 @@ class ClipJob:
     duration_s: float
 
 
+@dataclass(frozen=True)
+class PendingEvidence:
+    observation_id: str
+    job: ClipJob
+    output_path: Path
+    record_path: Path
+
+
 class AttemptRecorder:
     def __init__(
         self,
@@ -338,11 +346,13 @@ def main() -> None:
     resolution = calibration.get("analysis_resolution", [640, 360])
     target_size = (int(resolution[0]), int(resolution[1]))
     settings.output_path.mkdir(parents=True, exist_ok=True)
-    prune_stale_worker_files(settings.output_path)
 
     if settings.probe_seconds > 0:
         probe_stream(settings.stream_url, target_size, settings.probe_seconds)
         return
+
+    retry_pending_evidence(settings)
+    prune_stale_worker_files(settings.output_path)
 
     route_definitions.start()
     if route_definitions.enabled:
@@ -857,14 +867,7 @@ def analyze_job(
         (output / "observation-response.json").write_text(
             json.dumps(response, ensure_ascii=False, indent=2), encoding="utf-8"
         )
-        upload_observation_evidence(
-            settings.api_url,
-            settings.worker_token,
-            response["id"],
-            job,
-        )
-        job.video_path.unlink(missing_ok=True)
-        remove_rendered_videos(output)
+        deliver_observation_evidence(settings, response["id"], job, output)
     print(
         f"completed {job.attempt_id}: {analysis['outcome']} "
         f"confidence={analysis['confidence']}",
@@ -959,14 +962,7 @@ def analyze_multi_route_job(
         (output / "observation-response.json").write_text(
             json.dumps(response, ensure_ascii=False, indent=2), encoding="utf-8"
         )
-        upload_observation_evidence(
-            settings.api_url,
-            settings.worker_token,
-            response["id"],
-            job,
-        )
-        job.video_path.unlink(missing_ok=True)
-        remove_rendered_videos(output)
+        deliver_observation_evidence(settings, response["id"], job, output)
     print(
         f"completed {job.attempt_id}: route={definition['route']['code']} "
         f"outcome={analysis['outcome']} confidence={analysis['confidence']}",
@@ -1141,6 +1137,8 @@ def upload_observation_evidence(
     worker_token: str,
     observation_id: str,
     job: ClipJob,
+    *,
+    max_attempts: int = 3,
 ) -> dict[str, Any]:
     evidence_path = transcode_evidence_video(job.video_path)
     size_bytes = evidence_path.stat().st_size
@@ -1148,27 +1146,165 @@ def upload_observation_evidence(
     endpoint = (
         f"{api_url.rstrip('/')}/camera/worker/observations/{observation_id}/evidence"
     )
+    attempts = max(1, max_attempts)
+    last_error: Exception | None = None
     try:
-        with evidence_path.open("rb") as video:
-            response = requests.put(
-                endpoint,
-                data=video,
-                headers={
-                    "content-type": "video/mp4",
-                    "content-length": str(size_bytes),
-                    "x-camera-worker-token": worker_token,
-                    "x-video-duration-ms": str(round(job.duration_s * 1000)),
-                    "x-video-sha256": checksum,
-                },
-                timeout=(10, 120),
-            )
+        for attempt in range(1, attempts + 1):
+            try:
+                with evidence_path.open("rb") as video:
+                    response = requests.put(
+                        endpoint,
+                        data=video,
+                        headers={
+                            "content-type": "video/mp4",
+                            "content-length": str(size_bytes),
+                            "x-camera-worker-token": worker_token,
+                            "x-video-duration-ms": str(round(job.duration_s * 1000)),
+                            "x-video-sha256": checksum,
+                        },
+                        timeout=(10, 120),
+                    )
+                if response.ok:
+                    return dict(response.json())
+                last_error = RuntimeError(
+                    f"识别录像上传失败 HTTP {response.status_code}: {response.text[:500]}"
+                )
+            except requests.RequestException as error:
+                last_error = error
+            if attempt < attempts:
+                print(
+                    f"evidence upload retry {attempt}/{attempts} "
+                    f"for observation {observation_id}: {last_error}",
+                    flush=True,
+                )
+                time.sleep(2 ** (attempt - 1))
     finally:
         evidence_path.unlink(missing_ok=True)
-    if not response.ok:
-        raise RuntimeError(
-            f"识别录像上传失败 HTTP {response.status_code}: {response.text[:500]}"
+    raise RuntimeError(f"识别录像上传重试后仍失败: {last_error}") from last_error
+
+
+def deliver_observation_evidence(
+    settings: WorkerSettings,
+    observation_id: str,
+    job: ClipJob,
+    output: Path,
+) -> None:
+    assert settings.api_url and settings.worker_token
+    pending = persist_pending_evidence(settings.output_path, observation_id, job, output)
+    try:
+        upload_observation_evidence(settings.api_url, settings.worker_token, observation_id, job)
+    except Exception:
+        report_observation_evidence_failure(
+            settings.api_url, settings.worker_token, observation_id
         )
-    return dict(response.json())
+        raise
+    pending.record_path.unlink(missing_ok=True)
+    job.video_path.unlink(missing_ok=True)
+    remove_rendered_videos(output)
+
+
+def persist_pending_evidence(
+    worker_output: Path,
+    observation_id: str,
+    job: ClipJob,
+    output: Path,
+) -> PendingEvidence:
+    pending_dir = worker_output / "pending-evidence"
+    pending_dir.mkdir(parents=True, exist_ok=True)
+    record_path = pending_dir / f"{safe_path(job.attempt_id)}.json"
+    payload = {
+        "observationId": observation_id,
+        "attemptId": job.attempt_id,
+        "videoPath": str(job.video_path.relative_to(worker_output)),
+        "outputPath": str(output.relative_to(worker_output)),
+        "observedAt": job.observed_at,
+        "durationS": job.duration_s,
+    }
+    temporary_path = record_path.with_suffix(".json.tmp")
+    temporary_path.write_text(
+        json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8"
+    )
+    temporary_path.replace(record_path)
+    return PendingEvidence(observation_id, job, output, record_path)
+
+
+def retry_pending_evidence(settings: WorkerSettings) -> None:
+    if not settings.api_url or not settings.worker_token:
+        return
+    pending_dir = settings.output_path / "pending-evidence"
+    if not pending_dir.exists():
+        return
+    for record_path in sorted(pending_dir.glob("*.json")):
+        try:
+            pending = load_pending_evidence(settings.output_path, record_path)
+            if not pending.job.video_path.is_file():
+                report_observation_evidence_failure(
+                    settings.api_url, settings.worker_token, pending.observation_id
+                )
+                record_path.unlink(missing_ok=True)
+                continue
+            upload_observation_evidence(
+                settings.api_url,
+                settings.worker_token,
+                pending.observation_id,
+                pending.job,
+            )
+            pending.job.video_path.unlink(missing_ok=True)
+            remove_rendered_videos(pending.output_path)
+            record_path.unlink(missing_ok=True)
+            print(
+                f"recovered pending evidence for observation {pending.observation_id}",
+                flush=True,
+            )
+        except Exception as error:
+            print(f"pending evidence retry failed for {record_path.name}: {error}", flush=True)
+
+
+def load_pending_evidence(worker_output: Path, record_path: Path) -> PendingEvidence:
+    payload = json.loads(record_path.read_text(encoding="utf-8"))
+    video_path = safe_worker_path(worker_output, payload["videoPath"])
+    output_path = safe_worker_path(worker_output, payload["outputPath"])
+    job = ClipJob(
+        attempt_id=str(payload["attemptId"]),
+        video_path=video_path,
+        observed_at=str(payload["observedAt"]),
+        duration_s=float(payload["durationS"]),
+    )
+    return PendingEvidence(str(payload["observationId"]), job, output_path, record_path)
+
+
+def safe_worker_path(worker_output: Path, relative_path: str) -> Path:
+    root = worker_output.resolve()
+    candidate = (root / relative_path).resolve()
+    if candidate != root and root not in candidate.parents:
+        raise ValueError("待上传录像路径超出 Worker 输出目录")
+    return candidate
+
+
+def report_observation_evidence_failure(
+    api_url: str, worker_token: str, observation_id: str
+) -> None:
+    endpoint = (
+        f"{api_url.rstrip('/')}/camera/worker/observations/"
+        f"{observation_id}/evidence-failure"
+    )
+    request = urllib.request.Request(
+        endpoint,
+        data=b"{}",
+        headers={
+            "content-type": "application/json",
+            "x-camera-worker-token": worker_token,
+        },
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=15):
+            return
+    except Exception as error:
+        print(
+            f"failed to report evidence upload failure for {observation_id}: {error}",
+            flush=True,
+        )
 
 
 def transcode_evidence_video(source: Path) -> Path:

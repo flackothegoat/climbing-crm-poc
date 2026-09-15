@@ -1,4 +1,8 @@
-import { CameraObservationEvidenceStatus, MembershipRole } from '@prisma/client';
+import {
+  CameraObservationEvidenceState,
+  CameraObservationEvidenceStatus,
+  MembershipRole,
+} from '@prisma/client';
 import { createHash } from 'node:crypto';
 import { Readable } from 'node:stream';
 import { describe, expect, it, vi } from 'vitest';
@@ -42,8 +46,10 @@ describe('CameraObservationEvidenceService', () => {
           metadata: { requiresReview: true },
           evidence: null,
         }),
+        update: vi.fn(),
       },
       cameraObservationEvidence: { create: vi.fn().mockResolvedValue(evidence) },
+      $transaction: vi.fn(async (callback: (transaction: object) => unknown) => callback(prisma)),
     };
     const storage = {
       putStream: vi.fn(async (_key, stream: Readable) => {
@@ -67,6 +73,26 @@ describe('CameraObservationEvidenceService', () => {
     expect(prisma.cameraObservationEvidence.create).toHaveBeenCalledWith(
       expect.objectContaining({
         data: expect.objectContaining({ observationId: 'observation-1', checksumSha256 }),
+      }),
+    );
+    expect(prisma.climbObservation.update).toHaveBeenCalledWith({
+      where: { id: 'observation-1' },
+      data: { evidenceState: CameraObservationEvidenceState.AVAILABLE },
+    });
+  });
+
+  it('在 Worker 重试耗尽后标记录像上传失败', async () => {
+    const prisma = {
+      climbObservation: { updateMany: vi.fn().mockResolvedValue({ count: 1 }) },
+    };
+    const service = serviceWith(prisma, {});
+
+    await expect(service.markUploadFailed('observation-1')).resolves.toEqual({
+      evidenceState: CameraObservationEvidenceState.FAILED,
+    });
+    expect(prisma.climbObservation.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: { evidenceState: CameraObservationEvidenceState.FAILED },
       }),
     );
   });

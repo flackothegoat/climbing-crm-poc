@@ -1,4 +1,5 @@
 import {
+  CameraObservationEvidenceState,
   CameraObservationReviewDecision,
   CameraObservationReviewStatus,
   ClimbObservationOutcome,
@@ -30,6 +31,7 @@ function observation(id: string) {
     correctsObservationId: null,
     createdByAccountId: null,
     reviewStatus: CameraObservationReviewStatus.UNREVIEWED,
+    evidenceState: CameraObservationEvidenceState.NOT_RECORDED,
     metadata: { confidence: 0.68, requiresReview: true },
     createdAt: new Date('2026-09-08T08:00:01.000Z'),
     route: { id: 'route-1', code: 'W04-001', name: '蓝色测试线', color: 'BLUE' },
@@ -59,6 +61,7 @@ describe('CameraObservationService', () => {
     const result = await service.list(session, { pageSize: 1, reviewStatus: 'PENDING' });
 
     expect(result.items).toHaveLength(1);
+    expect(result.items[0]?.evidenceState).toBe(CameraObservationEvidenceState.NOT_RECORDED);
     expect(result.nextCursor).toBe('observation-2');
     expect(prisma.climbObservation.findMany).toHaveBeenCalledWith(
       expect.objectContaining({

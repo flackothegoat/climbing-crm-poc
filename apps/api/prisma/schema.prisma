@@ -332,6 +332,14 @@ enum CameraObservationEvidenceStatus {
   EXPIRED
 }
 
+enum CameraObservationEvidenceState {
+  NOT_RECORDED
+  PENDING
+  AVAILABLE
+  FAILED
+  EXPIRED
+}
+
 enum WallGeometryVersionStatus {
   DRAFT
   PUBLISHED
@@ -1317,7 +1325,7 @@ model RouteHoldPlacement {
 }
 
 model ClimbObservation {
-  id                    String                        @id @default(cuid())
+  id                    String                         @id @default(cuid())
   organizationId        String
   wallSegmentId         String?
   routeId               String
@@ -1329,18 +1337,19 @@ model ClimbObservation {
   requestKey            String?
   correctsObservationId String?
   createdByAccountId    String?
-  reviewStatus          CameraObservationReviewStatus @default(UNREVIEWED)
+  reviewStatus          CameraObservationReviewStatus  @default(UNREVIEWED)
+  evidenceState         CameraObservationEvidenceState @default(NOT_RECORDED)
   metadata              Json?
-  organization          Organization                  @relation(fields: [organizationId], references: [id], onDelete: Restrict)
-  wallSegment           WallSegment?                  @relation(fields: [wallSegmentId], references: [id], onDelete: Restrict)
-  route                 Route                         @relation(fields: [routeId], references: [id], onDelete: Restrict)
-  routeVersion          RouteVersion                  @relation(fields: [routeVersionId], references: [id], onDelete: Restrict)
-  correctsObservation   ClimbObservation?             @relation("ObservationCorrection", fields: [correctsObservationId], references: [id], onDelete: Restrict)
-  correctedBy           ClimbObservation[]            @relation("ObservationCorrection")
-  createdBy             Account?                      @relation("ClimbObservationCreator", fields: [createdByAccountId], references: [id], onDelete: Restrict)
+  organization          Organization                   @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  wallSegment           WallSegment?                   @relation(fields: [wallSegmentId], references: [id], onDelete: Restrict)
+  route                 Route                          @relation(fields: [routeId], references: [id], onDelete: Restrict)
+  routeVersion          RouteVersion                   @relation(fields: [routeVersionId], references: [id], onDelete: Restrict)
+  correctsObservation   ClimbObservation?              @relation("ObservationCorrection", fields: [correctsObservationId], references: [id], onDelete: Restrict)
+  correctedBy           ClimbObservation[]             @relation("ObservationCorrection")
+  createdBy             Account?                       @relation("ClimbObservationCreator", fields: [createdByAccountId], references: [id], onDelete: Restrict)
   reviews               CameraObservationReview[]
   evidence              CameraObservationEvidence?
-  createdAt             DateTime                      @default(now())
+  createdAt             DateTime                       @default(now())
 
   @@unique([organizationId, requestKey])
   @@index([organizationId, observedAt])
