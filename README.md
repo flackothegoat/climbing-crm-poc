@@ -109,7 +109,7 @@ pnpm dev
 ```bash
 pnpm worker:setup
 pnpm worker:probe
-pnpm worker:dev
+pnpm worker:start
 ```
 
 另一个终端可查看心跳：
@@ -119,6 +119,8 @@ pnpm worker:status
 ```
 
 本地 Worker 与 Azure Worker 完全独立。它必须从本地 API 读取到至少一条已发布的摄像头线路定义；输出默认保存在被 Git 忽略的 `tmp/vision-worker`。
+
+修改 Worker 时可以先执行 `pnpm worker:stop`。本地开发结束前必须执行 `pnpm worker:restore`：该命令会停止旧进程，用当前工作区代码重新启动 Worker，并等待最新心跳通过；随后再以 `pnpm worker:status` 复核。前台调试仍可使用 `pnpm worker:dev`，但关闭终端会同时停止该进程。
 
 ## 验证
 

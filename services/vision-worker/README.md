@@ -8,6 +8,19 @@
 
 生产部署由仓库根目录的 `infra/deploy-vision-worker.sh` 完成。Worker 使用独立 Compose 项目和受限环境文件，通过主应用内部 Docker 网络访问 API，不开放公网端口。
 
+## 本地进程管理
+
+本地 Worker 与 Azure Worker 是两套独立进程，本地页面只根据本地 API 收到的心跳判断状态。推荐在仓库根目录使用以下命令：
+
+```bash
+pnpm worker:start    # 后台启动当前工作区版本，并等待新心跳
+pnpm worker:status   # 同时确认进程与心跳
+pnpm worker:stop     # 修改 Worker 前暂停
+pnpm worker:restore  # 开发结束时重启当前工作区最新版并验活
+```
+
+`pnpm worker:dev` 仅用于前台调试，终端退出时进程也会停止。无论开发期间使用哪种方式，结束前都应运行 `pnpm worker:restore`；不要仅凭 `tmp/vision-worker/status.json` 判断在线，因为它可能只是已退出进程留下的旧快照。
+
 ## 识别录像生命周期
 
 - Worker 只从 API 获取 `PUBLISHED` 线路及其 `PUBLISHED` 版本；停用、删除或未创建的线路不会进入正式识别。

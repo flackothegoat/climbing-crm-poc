@@ -153,10 +153,14 @@ cd /Users/flacko/Documents/Codex/SummerIntern/poc
 pnpm services:status
 pnpm dev
 # 另一个终端
-pnpm worker:dev
+pnpm worker:start
 # 随时检查心跳
 pnpm worker:status
 ```
+
+本地页面只读取本地 API 收到的 Worker 心跳，与 Azure 上运行的 Worker 相互独立；因此 Azure 显示“实时算法监控中”时，本地仍可能因本地进程未启动而显示离线。`status.json` 只是最后一次心跳快照，不能单独证明进程仍在运行，统一使用 `pnpm worker:status` 同时检查进程和心跳。
+
+修改或调试 Worker 前可执行 `pnpm worker:stop`。开发结束前必须执行 `pnpm worker:restore`，它会停止受管旧进程、使用当前工作区代码启动最新版并等待本次启动产生健康心跳；随后再执行 `pnpm worker:status` 复核。需要观察前台日志时可临时使用 `pnpm worker:dev`，但关闭终端会结束该进程，退出前仍须恢复受管 Worker。
 
 常用入口：
 
@@ -177,7 +181,7 @@ pnpm worker:status
 - 本地页面已验证识别筛选始终可见、默认最近 10 条提示、每张线路卡片的独立复盘入口，以及算法/扫码双区域空数据展示。
 - 本地浏览器已验证线路概况横条、1280px 宽度三列线路卡片、编辑信息弹窗、复盘缩略图/完整截图弹窗和简化后的复盘文案。
 - 视觉门控回归测试覆盖空画面、不完整人体、无前景变化、低照度和发布前二次拦截。
-- 本地 Worker 目前因媒体流不可用处于离线，不把无真实流的状态描述为算法故障；应先核对场馆当前公网 IP、GB28181 注册与 WVP 媒体流。
+- 本地 Worker 与 Azure Worker 分开运行；本地开发结束前按上述流程恢复并验活当前工作区版本。若媒体流不可用，不把该状态直接描述为算法故障，应先核对场馆当前公网 IP、GB28181 注册与 WVP 媒体流。
 
 在提交或部署新功能前，至少执行：
 

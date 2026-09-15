@@ -63,7 +63,7 @@ mkdir -p "$output_dir"
 export MPLCONFIGDIR="${repo_dir}/tmp/matplotlib"
 mkdir -p "$MPLCONFIGDIR"
 cd "${repo_dir}/services/vision-worker"
-exec "$python_bin" live_stream_worker.py \
+exec "$python_bin" "${repo_dir}/services/vision-worker/live_stream_worker.py" \
   --stream-url "$stream_url" \
   --api-url "http://127.0.0.1:${api_port}/api" \
   --worker-token "$worker_token" \
