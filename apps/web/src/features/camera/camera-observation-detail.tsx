@@ -9,6 +9,7 @@ import {
 } from './camera-live-api';
 import {
   displayReviewStatus,
+  evidenceStateMessage,
   eventLabel,
   failureReasonLabel,
   finalOutcomeLabel,
@@ -31,9 +32,14 @@ export function CameraObservationDetail({
   const [comment, setComment] = useState('');
   const [message, setMessage] = useState('');
   const [saving, setSaving] = useState(false);
-  const evidenceAvailable =
-    observation.evidence?.status === 'AVAILABLE' &&
-    new Date(observation.evidence.expiresAt).getTime() > Date.now();
+  const evidenceExpired =
+    observation.evidence?.status === 'EXPIRED' ||
+    (observation.evidence != null &&
+      new Date(observation.evidence.expiresAt).getTime() <= Date.now());
+  const evidenceAvailable = observation.evidence?.status === 'AVAILABLE' && !evidenceExpired;
+  const evidenceMessage = evidenceStateMessage(
+    evidenceExpired ? 'EXPIRED' : observation.evidenceState,
+  );
 
   async function submitReview(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -107,9 +113,7 @@ export function CameraObservationDetail({
               </p>
             </>
           ) : (
-            <p>
-              {observation.evidence ? '录像已按安全策略过期。' : 'Worker 尚未上传本次识别录像。'}
-            </p>
+            <p>{evidenceMessage}</p>
           )}
         </section>
         <section>

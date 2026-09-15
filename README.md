@@ -12,7 +12,7 @@
 - 通过摄像头截图和浏览器端 SlimSAM 标注岩点轮廓，设置线路起点、终点并创建线路版本。
 - 线路查询、编辑、停用、恢复、删除、二维码反馈和单线路复盘。
 - Python 视觉服务读取已发布线路定义，识别攀爬尝试并幂等写入结果。
-- 识别历史搜索、筛选、短期录像证据和不可变人工复核。
+- 识别历史搜索、筛选、短期录像证据和不可变人工复核；录像状态可区分历史未留存、处理中、可播放、上传失败与已过期。
 - 人体完整性、无人墙面前景、低照度和正式起步多层门控，拒绝空画面误报进入业务统计。
 
 ## 系统架构
@@ -109,7 +109,7 @@ pnpm dev
 ```bash
 pnpm worker:setup
 pnpm worker:probe
-pnpm worker:dev
+pnpm worker:start
 ```
 
 另一个终端可查看心跳：
@@ -119,6 +119,8 @@ pnpm worker:status
 ```
 
 本地 Worker 与 Azure Worker 完全独立。它必须从本地 API 读取到至少一条已发布的摄像头线路定义；输出默认保存在被 Git 忽略的 `tmp/vision-worker`。
+
+修改 Worker 时可以先执行 `pnpm worker:stop`。本地开发结束前必须执行 `pnpm worker:restore`：该命令会停止旧进程，用当前工作区代码重新启动 Worker，并等待最新心跳通过；随后再以 `pnpm worker:status` 复核。前台调试仍可使用 `pnpm worker:dev`，但关闭终端会同时停止该进程。
 
 ## 验证
 

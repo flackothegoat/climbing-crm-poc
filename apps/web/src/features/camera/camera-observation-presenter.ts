@@ -53,3 +53,22 @@ export function failureReasonLabel(reason: string) {
 export function formatScore(value: number | undefined) {
   return typeof value === 'number' ? `${Math.round(value * 100)}%` : '—';
 }
+
+export function evidenceStateMessage(
+  state: CameraObservation['evidenceState'] | undefined,
+): string {
+  switch (state) {
+    case 'NOT_RECORDED':
+      return '该记录产生时未启用录像留存，因此没有历史录像。';
+    case 'PENDING':
+      return '录像正在处理或上传，请稍后刷新查看。';
+    case 'FAILED':
+      return '录像上传未成功，识别结果仍可复核；请联系管理员检查录像服务。';
+    case 'EXPIRED':
+      return '录像已按安全保留策略自动过期。';
+    case 'AVAILABLE':
+      return '录像暂时不可播放，请刷新后重试。';
+    default:
+      return '暂时无法获取录像状态，请稍后刷新。';
+  }
+}

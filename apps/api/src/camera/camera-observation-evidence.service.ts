@@ -9,7 +9,11 @@ import {
   OnModuleInit,
   ServiceUnavailableException,
 } from '@nestjs/common';
-import { CameraObservationEvidenceStatus, ClimbObservationSource } from '@prisma/client';
+import {
+  CameraObservationEvidenceState,
+  CameraObservationEvidenceStatus,
+  ClimbObservationSource,
+} from '@prisma/client';
 import { createHash, randomUUID } from 'node:crypto';
 import type { Readable } from 'node:stream';
 import { Transform } from 'node:stream';
@@ -65,6 +69,10 @@ export class CameraObservationEvidenceService implements OnModuleInit, OnModuleD
     if (!observation) throw new NotFoundException('摄像头识别记录不存在');
     if (observation.evidence) {
       if (observation.evidence.checksumSha256 === input.checksumSha256) {
+        await this.prisma.climbObservation.update({
+          where: { id: observationId },
+          data: { evidenceState: CameraObservationEvidenceState.AVAILABLE },
+        });
         return mapEvidence(observation.evidence);
       }
       throw new ConflictException('该识别记录已经关联其他录像');
@@ -88,17 +96,24 @@ export class CameraObservationEvidenceService implements OnModuleInit, OnModuleD
           : regularRetentionMs;
     const expiresAt = new Date(Date.now() + retentionMs);
     try {
-      const evidence = await this.prisma.cameraObservationEvidence.create({
-        data: {
-          organizationId,
-          observationId,
-          objectKey,
-          contentType: 'video/mp4',
-          sizeBytes: input.sizeBytes,
-          checksumSha256: input.checksumSha256.toLowerCase(),
-          durationMs: input.durationMs,
-          expiresAt,
-        },
+      const evidence = await this.prisma.$transaction(async (transaction) => {
+        const created = await transaction.cameraObservationEvidence.create({
+          data: {
+            organizationId,
+            observationId,
+            objectKey,
+            contentType: 'video/mp4',
+            sizeBytes: input.sizeBytes,
+            checksumSha256: input.checksumSha256.toLowerCase(),
+            durationMs: input.durationMs,
+            expiresAt,
+          },
+        });
+        await transaction.climbObservation.update({
+          where: { id: observationId },
+          data: { evidenceState: CameraObservationEvidenceState.AVAILABLE },
+        });
+        return created;
       });
       await this.audit.record({
         organizationId,
@@ -111,6 +126,35 @@ export class CameraObservationEvidenceService implements OnModuleInit, OnModuleD
       await this.removeOrQueue(objectKey, 'camera-evidence-compensation');
       throw error;
     }
+  }
+
+  async markUploadFailed(observationId: string): Promise<{ evidenceState: string }> {
+    const organizationId = this.config.values.CAMERA_WORKER_ORGANIZATION_ID;
+    if (!organizationId) throw new ServiceUnavailableException('视觉 Worker 尚未绑定岩馆');
+    const result = await this.prisma.climbObservation.updateMany({
+      where: {
+        id: observationId,
+        organizationId,
+        source: ClimbObservationSource.CAMERA,
+        evidence: null,
+      },
+      data: { evidenceState: CameraObservationEvidenceState.FAILED },
+    });
+    if (result.count === 0) {
+      const observation = await this.prisma.climbObservation.findFirst({
+        where: { id: observationId, organizationId, source: ClimbObservationSource.CAMERA },
+        select: { evidenceState: true },
+      });
+      if (!observation) throw new NotFoundException('摄像头识别记录不存在');
+      return observation;
+    }
+    await this.audit.record({
+      organizationId,
+      type: 'camera.observation.evidence_upload_failed',
+      outcome: 'FAILURE',
+      metadata: { observationId },
+    });
+    return { evidenceState: CameraObservationEvidenceState.FAILED };
   }
 
   async get(session: CurrentSession, observationId: string, rangeHeader?: string) {
@@ -150,9 +194,16 @@ export class CameraObservationEvidenceService implements OnModuleInit, OnModuleD
         } catch (error) {
           await this.cleanup.enqueue(evidence.objectKey, 'camera-evidence-expired', error);
         }
-        await this.prisma.cameraObservationEvidence.update({
-          where: { id: evidence.id },
-          data: { status: CameraObservationEvidenceStatus.EXPIRED, expiredAt: new Date() },
+        const expiredAt = new Date();
+        await this.prisma.$transaction(async (transaction) => {
+          await transaction.cameraObservationEvidence.update({
+            where: { id: evidence.id },
+            data: { status: CameraObservationEvidenceStatus.EXPIRED, expiredAt },
+          });
+          await transaction.climbObservation.update({
+            where: { id: evidence.observationId },
+            data: { evidenceState: CameraObservationEvidenceState.EXPIRED },
+          });
         });
         await this.audit.record({
           organizationId: evidence.organizationId,

@@ -68,6 +68,12 @@ export class CameraWorkerController {
     );
   }
 
+  @Post('observations/:observationId/evidence-failure')
+  @ApiOperation({ summary: '由视觉 Worker 标记录像在重试后仍上传失败' })
+  markEvidenceUploadFailed(@Param('observationId') observationId: unknown) {
+    return this.evidence.markUploadFailed(parseCameraObservationId(observationId));
+  }
+
   @Post('heartbeat')
   @ApiOperation({ summary: '由视觉 Worker 上报实时流、线路定义和尝试状态' })
   heartbeat(@Body() body: unknown) {

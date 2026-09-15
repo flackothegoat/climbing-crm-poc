@@ -210,6 +210,15 @@ const checks = {
        OR (evidence."status" = 'AVAILABLE' AND evidence."expiredAt" IS NOT NULL)
        OR (evidence."status" = 'EXPIRED' AND evidence."expiredAt" IS NULL)
   `,
+  cameraObservationEvidenceStateMismatch: `
+    SELECT COUNT(*)::int AS count
+    FROM "ClimbObservation" observation
+    LEFT JOIN "CameraObservationEvidence" evidence
+      ON evidence."observationId" = observation."id"
+    WHERE (evidence."id" IS NULL AND observation."evidenceState" IN ('AVAILABLE', 'EXPIRED'))
+       OR (evidence."status" = 'AVAILABLE' AND observation."evidenceState" <> 'AVAILABLE')
+       OR (evidence."status" = 'EXPIRED' AND observation."evidenceState" <> 'EXPIRED')
+  `,
   negativeInventoryBalance: `
     SELECT COUNT(*)::int AS count
     FROM "HoldInventoryBalance"

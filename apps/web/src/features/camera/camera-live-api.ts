@@ -37,6 +37,7 @@ export interface CameraObservation {
   source: 'CAMERA';
   climberKey: string | null;
   reviewStatus: 'UNREVIEWED' | 'CONFIRMED' | 'OVERRIDDEN' | 'INVALIDATED';
+  evidenceState: 'NOT_RECORDED' | 'PENDING' | 'AVAILABLE' | 'FAILED' | 'EXPIRED';
   route: { id: string; code: string; name: string; color: string };
   routeVersion: { id: string; versionNumber: number };
   wallSegment: { id: string; code: string; name: string } | null;

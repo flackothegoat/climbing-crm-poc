@@ -7,6 +7,7 @@ import unittest
 from datetime import datetime, timezone
 from pathlib import Path
 from tempfile import TemporaryDirectory
+from unittest.mock import Mock, patch
 
 from live_stream_worker import (
     ClipJob,
@@ -15,10 +16,13 @@ from live_stream_worker import (
     discard_unassigned_attempt,
     file_sha256,
     has_confirmed_start,
+    load_pending_evidence,
     load_worker_calibration,
     normalize_stream_url,
     publication_rejection_reasons,
+    persist_pending_evidence,
     prune_stale_worker_files,
+    upload_observation_evidence,
     write_status,
 )
 
@@ -159,6 +163,68 @@ class LiveStreamWorkerTest(unittest.TestCase):
                 file_sha256(video),
                 "f5cee54fb1838c897dd490afc0f2eb07e1b69487179819a8a9331f082db19a0c",
             )
+
+    def test_persists_pending_evidence_for_restart_recovery(self) -> None:
+        with TemporaryDirectory() as directory:
+            root = Path(directory)
+            video = root / "temporary-clips" / "live-001.mp4"
+            output = root / "attempts" / "live-001"
+            video.parent.mkdir(parents=True)
+            output.mkdir(parents=True)
+            video.write_bytes(b"camera-evidence")
+            job = ClipJob(
+                attempt_id="live-001",
+                video_path=video,
+                observed_at=datetime(2026, 8, 27, tzinfo=timezone.utc).isoformat(),
+                duration_s=42,
+            )
+
+            pending = persist_pending_evidence(root, "observation-1", job, output)
+            restored = load_pending_evidence(root, pending.record_path)
+
+            self.assertEqual(restored.observation_id, "observation-1")
+            self.assertEqual(restored.job.attempt_id, job.attempt_id)
+            self.assertEqual(restored.job.video_path, video.resolve())
+            self.assertEqual(restored.job.observed_at, job.observed_at)
+            self.assertEqual(restored.job.duration_s, job.duration_s)
+            self.assertEqual(restored.output_path, output.resolve())
+
+    @patch("live_stream_worker.time.sleep")
+    @patch("live_stream_worker.requests.put")
+    @patch("live_stream_worker.transcode_evidence_video")
+    def test_retries_evidence_upload_before_succeeding(
+        self,
+        transcode: Mock,
+        put: Mock,
+        sleep: Mock,
+    ) -> None:
+        with TemporaryDirectory() as directory:
+            root = Path(directory)
+            source = root / "attempt.mp4"
+            evidence = root / "attempt.evidence.mp4"
+            source.write_bytes(b"source")
+            evidence.write_bytes(b"camera-evidence")
+            transcode.return_value = evidence
+            failed = Mock(ok=False, status_code=503, text="temporary outage")
+            succeeded = Mock(ok=True)
+            succeeded.json.return_value = {"id": "evidence-1"}
+            put.side_effect = [failed, succeeded]
+            job = ClipJob(
+                attempt_id="live-001",
+                video_path=source,
+                observed_at=datetime(2026, 8, 27, tzinfo=timezone.utc).isoformat(),
+                duration_s=42,
+            )
+
+            result = upload_observation_evidence(
+                "http://api:3101/api", "worker-token", "observation-1", job
+            )
+
+            self.assertEqual(result, {"id": "evidence-1"})
+            self.assertEqual(put.call_count, 2)
+            sleep.assert_called_once_with(1)
+            self.assertFalse(evidence.exists())
+            self.assertTrue(source.exists())
 
     def test_status_distinguishes_connected_stream_from_paused_recognition(self) -> None:
         with TemporaryDirectory() as directory:

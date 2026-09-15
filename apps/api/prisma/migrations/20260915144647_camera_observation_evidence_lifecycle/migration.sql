@@ -1,0 +1,8 @@
+-- RenameIndex
+ALTER INDEX "CameraRouteDefinition_organizationId_cameraKey_routeVersionId_k" RENAME TO "CameraRouteDefinition_organizationId_cameraKey_routeVersion_key";
+
+-- RenameIndex
+ALTER INDEX "HoldUnit_currentCustodianOrganizationId_currentFacilityId_physi" RENAME TO "HoldUnit_currentCustodianOrganizationId_currentFacilityId_p_idx";
+
+-- RenameIndex
+ALTER INDEX "RouteFeedback_anonymousSessionKey_routeVersionId_submittedAt_id" RENAME TO "RouteFeedback_anonymousSessionKey_routeVersionId_submittedA_idx";

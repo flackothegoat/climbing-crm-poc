@@ -5,6 +5,7 @@ import {
   ServiceUnavailableException,
 } from '@nestjs/common';
 import {
+  CameraObservationEvidenceState,
   CameraObservationReviewDecision,
   CameraObservationReviewStatus,
   ClimbObservationOutcome,
@@ -172,7 +173,12 @@ export class CameraObservationService {
 
   async create(session: CurrentSession, input: CreateCameraObservationInput) {
     this.access.assert(session, Capability.ASSET_DRAFT_WRITE);
-    return this.createForOrganization(input, session.organization.id, session.account.id);
+    return this.createForOrganization(
+      input,
+      CameraObservationEvidenceState.NOT_RECORDED,
+      session.organization.id,
+      session.account.id,
+    );
   }
 
   async createFromWorker(input: CreateCameraObservationInput) {
@@ -180,11 +186,16 @@ export class CameraObservationService {
     if (!organizationId) {
       throw new ServiceUnavailableException('摄像头 Worker 尚未绑定组织');
     }
-    return this.createForOrganization(input, organizationId);
+    return this.createForOrganization(
+      input,
+      CameraObservationEvidenceState.PENDING,
+      organizationId,
+    );
   }
 
   private async createForOrganization(
     input: CreateCameraObservationInput,
+    evidenceState: CameraObservationEvidenceState,
     expectedOrganizationId?: string,
     actorAccountId?: string,
   ) {
@@ -234,6 +245,7 @@ export class CameraObservationService {
           observedAt: new Date(input.observedAt),
           climberKey: input.climberKey,
           requestKey: input.requestKey,
+          evidenceState,
           metadata: toMetadata(input),
         },
         include: observationInclude,
@@ -283,6 +295,7 @@ function mapObservation(observation: ObservationRecord) {
     source: observation.source,
     climberKey: observation.climberKey,
     reviewStatus: observation.reviewStatus,
+    evidenceState: observation.evidenceState,
     route: observation.route,
     routeVersion: observation.routeVersion,
     wallSegment: observation.wallSegment,
