@@ -47,9 +47,9 @@ export function AuthForm() {
 function AuthHeader({ mode }: { mode: AuthMode }) {
   return (
     <header className="auth-header">
-      <p className="eyebrow">CLIMBING CRM</p>
+      <p className="eyebrow">CLIMBING · 数字化运营平台</p>
       <h1>{mode === 'login' ? '欢迎回来' : '创建岩馆工作区'}</h1>
-      <p>{mode === 'login' ? '使用你的邮箱账号继续。' : '首位注册用户将成为 L1 管理员。'}</p>
+      <p>{mode === 'login' ? '登录后继续管理你的岩馆。' : '建立岩馆工作区，开始整理资产与线路。'}</p>
     </header>
   );
 }
