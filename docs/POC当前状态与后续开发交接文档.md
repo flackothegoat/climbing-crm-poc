@@ -162,6 +162,8 @@ pnpm worker:status
 
 修改或调试 Worker 前可执行 `pnpm worker:stop`。开发结束前必须执行 `pnpm worker:restore`，它会停止受管旧进程、使用当前工作区代码启动最新版并等待本次启动产生健康心跳；随后再执行 `pnpm worker:status` 复核。需要观察前台日志时可临时使用 `pnpm worker:dev`，但关闭终端会结束该进程，退出前仍须恢复受管 Worker。
 
+2026-09-16 收尾复核中，本地 Worker 已确认由当前 `main` 启动并成功读取 3 条定义，但延长运行后公网 FLV 出现连续超时、连接重置和 H.264 包损坏，状态因此正确降为 `OFFLINE`。这表示当前进程拿不到稳定视频帧，不表示仍在运行旧代码；Azure Worker 在本次发布验收中独立保持健康。排查时应先验证 WVP 媒体源和本机到公网流的稳定性，再判断是否属于算法故障。
+
 常用入口：
 
 - Web：`http://localhost:3100`
