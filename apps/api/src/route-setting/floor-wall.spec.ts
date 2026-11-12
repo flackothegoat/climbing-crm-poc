@@ -5,6 +5,9 @@ import { generateRouteCandidates } from './route-candidates';
 
 const holds = JSON.parse(readFileSync('../web/public/data/holds.json', 'utf8')).holds;
 const config = { DEROUTER_API_KEY: undefined, DEROUTER_OPENAI_BASE: 'https://example.test/v1', DEROUTER_ANTHROPIC_BASE: 'https://example.test' };
+// Real-catalog solver checks generate three candidates; shared CI runners can
+// exceed Vitest's 5s default. These check constraints, not a latency target.
+const solverTestTimeoutMs = 15_000;
 afterEach(()=>vi.restoreAllMocks());
 describe('天宇一楼几何与米制定线',()=>{
   it('保留六段底宽、顶宽、倾角与五个连接面；表面正反变换一致',()=>{
@@ -33,7 +36,7 @@ describe('天宇一楼几何与米制定线',()=>{
     for(const c of body.candidates){expect(c.placements.length).toBeLessThanOrEqual(12);expect(c.metrics.passed).toBe(true);expect(c.metrics.startFootCount).toBe(2);
       expect(c.placements.every((p:{surfaceId:string;x:number;y:number})=>p.surfaceId===faceId&&p.x>0&&p.x<100&&p.y>0&&p.y<100)).toBe(true);
     }
-  });
+  }, solverTestTimeoutMs);
   it('拒绝不存在的墙面与固定板混用墙面配置',async()=>{
     for(const patch of [{mode:'free',wall:{id:WALL_ID,faceId:'J1'}},{mode:'fixed',wall:{id:WALL_ID,faceId:'F2'}}]){
       const response=await generateRouteCandidates({prompt:'V4 技术型',model:'gpt-6-astra',holds,...patch},config);expect(response.status).toBe(400);
@@ -45,5 +48,5 @@ describe('天宇一楼几何与米制定线',()=>{
     const request=JSON.parse(String(fetch.mock.calls[0][1]?.body));const message=JSON.parse(request.messages[1].content);
     expect(message.wall.angleDegreesFromVertical).toBe(25);expect(message.wall.widthM).toBeCloseTo(workingArea('F4').widthM);
     expect(response.status).toBe(200);expect((await response.json()).candidates[0].placements[0].surfaceId).toBe('F4');
-  });
+  }, solverTestTimeoutMs);
 });
