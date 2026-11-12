@@ -1,92 +1,93 @@
-# Climbing 数字化运营平台 POC
+# Climbing AI
 
-面向攀岩馆的多租户 SaaS POC，贯通岩点资产、线路视觉建档、摄像头识别、录像复核和线路反馈。系统只展示数据库中的真实业务数据，不使用前端写死的演示统计。
+**English** | [简体中文](README.zh-CN.md)
 
-当前目标是验证单馆低并发场景中的业务闭环和工程边界，不等同于已经完成生产化的通用攀岩识别产品。RFID 批量盘点和跨馆流转已保留领域模型与接口，动态公网 IP 自动白名单仍在隔离实验分支中，均不应描述为已验收功能。
+A full-stack proof of concept for climbing-gym operations, AI-assisted route setting and athlete training. It combines a multi-tenant operations platform with computer vision, a 3D route editor and video-based training review.
 
-## 核心能力
+[Live demo](https://yirocks.com/) · [Development source](https://github.com/webanaiservice/climbingAI) · [Implementation notes](#implementation-notes)
 
-- 邮箱注册、登录、HTTP-only Session、`L1_ADMIN` / `L2_ADMIN` 权限和组织级租户隔离。
-- 岩点规格、照片、GLB 模型、库存余额与不可变流水的增删改查。
-- 登录后的 AI 辅助定线模块：独立单点岩点库、自由墙/固定板/天宇训练板、人工调点和三条候选线路。
-- RFID 标签、单件追踪、盘点会话和跨馆流转领域接口。
-- 通过摄像头截图和浏览器端 SlimSAM 标注岩点轮廓，设置线路起点、终点并创建线路版本。
-- 线路查询、编辑、停用、恢复、删除、二维码反馈和单线路复盘。
-- Python 视觉服务读取已发布线路定义，识别攀爬尝试并幂等写入结果。
-- 识别历史搜索、筛选、短期录像证据和不可变人工复核；录像状态可区分历史未留存、处理中、可播放、上传失败与已过期。
-- 人体完整性、无人墙面前景、低照度和正式起步多层门控，拒绝空画面误报进入业务统计。
+The demo requires sign-in. Some AI workspaces also require a server-side feature flag and an approved account. Repository implementation does not imply that every feature is enabled on the live deployment.
 
-## 系统架构
+## Current scope
+
+This repository incorporates development from `webanaiservice/climbingAI` through [`4c5351f`](https://github.com/webanaiservice/climbingAI/commit/4c5351fc05f47dc3e4bd337c9ead7b071a04cace), dated 16 October 2026. The synchronization was recorded on 12 November 2026 and retains the original commit history and contributors.
+
+| Area                      | Implemented in the repository                                                                                               | Important boundary                                                                        |
+| ------------------------- | --------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------- |
+| Gym operations            | Hold assets, stock movements, route versions, staff accounts, session authentication and tenant isolation                   | Single-gym POC validation; multi-gym commercial operations have not been established      |
+| Camera observations       | Live streams, Python pose analysis, staged validation, video evidence and staff review                                      | Rule-based evidence scores are not calibrated accuracy probabilities                      |
+| AI-assisted route setting | Cloud-assisted candidates, local constraint-solving fallback and manual editing                                             | Candidates remain drafts for human review and physical testing                            |
+| Training boards           | Photo/GLB registration, manual route editing, starting-limb assignments, move sequences and saved route drafts              | Route drafts persist on the server; board calibration is stored separately in the browser |
+| 3D wall editor            | Six wall segments, hold placement, cross-segment manual editing, geometry-aware candidate generation and JSON import/export | Geometry is reconstructed from design screenshots, not an as-built survey                 |
+| Athlete training          | Profiles, measurements, sessions, attempts, video playback, AI review, coach feedback, tasks and progress reports           | AI observations are not a validated autonomous coach or medical assessment                |
+| Tablet interaction        | Responsive workspaces, touch picking, focus/zoom controls and compatibility fallbacks                                       | Browser simulation does not replace testing on a physical iPad/Safari device              |
+
+## Workspaces
+
+### Operations center
+
+- Manage hold specifications, photos, GLB assets, inventory balances and immutable stock movements.
+- Create and version routes; configure visual holds with browser-side SlimSAM and publish definitions for the vision worker.
+- Review camera observations with retained video evidence, keeping algorithm output separate from staff decisions.
+- Use free-wall and virtual-board route-setting tools. The Tianyu ground-floor editor supports manual hold placement across wall segments; AI generation operates within one selected segment using its geometry.
+
+### Training center
+
+- Maintain athlete profiles, dated measurements, training sessions and attempts with an explicit timing source.
+- Upload and replay training video, add timestamped markers and compare selected videos manually.
+- Request model-selectable AI review from sampled frames and training context. Analysis is queued, reports are validated and request snapshots and failure states are retained.
+- Keep coach feedback alongside the AI report. Generating a task from an AI report requires coach confirmation; manual tasks remain available without AI.
+- Edit Tianyu board routes manually or adopt an AI candidate, preserving the original candidate baseline. Save independent server-side drafts with revision checks and organization isolation.
+
+### Persistence
+
+| Data                                                              | Storage                                                                |
+| ----------------------------------------------------------------- | ---------------------------------------------------------------------- |
+| Business records, training records and saved Tianyu route drafts  | PostgreSQL through Prisma                                              |
+| Images, GLB assets, camera evidence and production training video | MinIO; optional local training-video storage for development           |
+| Board calibration and virtual/free-wall editing state             | Browser storage; free-wall JSON export/import supports manual transfer |
+
+A saved training-board route includes a board snapshot. Opening it does not replace the separately saved local board calibration. Draft routes are not automatically published into the operations route library.
+
+## Architecture
 
 ```mermaid
 flowchart LR
-    User["馆方员工 / 攀岩者"] --> Web["Next.js Web"]
-    Web --> API["NestJS + Fastify API"]
-    API --> DB["PostgreSQL"]
-    API --> Storage["MinIO 对象存储"]
-    Web --> SAM["浏览器端 SlimSAM"]
-    Camera["岩馆 GB28181 摄像头"] --> Media["WVP / ZLMediaKit"]
-    Media --> Web
-    Media --> Worker["Python 视觉识别服务"]
-    API --> Worker
-    Worker --> API
+    Staff["Gym staff and coaches"] --> Web["Next.js / React / TypeScript"]
+    Web --> API["NestJS / Fastify API"]
+    API --> DB["PostgreSQL / Prisma"]
+    API --> Media["MinIO / training video storage"]
+    Web --> Editors["Three.js editors / browser SlimSAM"]
+    Camera["Gym cameras"] --> Streams["WVP / ZLMediaKit"]
+    Streams --> Web
+    Streams --> Vision["Python / OpenCV / YOLO Pose"]
+    Vision --> API
+    API --> Review["FFmpeg frame sampling / analysis queue"]
+    Review --> Models["Server-side model provider"]
+    Review --> DB
 ```
 
-关键边界：
+The server derives the organization and permissions from the authenticated session. Model credentials remain server-side. AI review sends the selected video frames and relevant context to the configured provider after the in-product disclosure and consent step.
 
-- 浏览器不提交可信的组织 ID 或角色；业务范围由服务端 Session 推导。
-- PostgreSQL 保存结构化事实，图片、GLB 和录像保存在 MinIO。
-- SlimSAM 只生成待用户确认的轮廓，不直接创造线路业务真值。
-- 视觉服务只读取已发布且未停用的线路，不按颜色或名称猜测线路 ID。
-- 算法评分是规则证据评分，不是经过真实样本校准的统计正确率；人工复核与算法原判分别保存。
+## Technology
 
-## 技术栈
+| Layer          | Main technologies                                        |
+| -------------- | -------------------------------------------------------- |
+| Web            | Next.js 15, React 19, TypeScript, Three.js, model-viewer |
+| API            | NestJS 11, Fastify 5, Zod, Swagger                       |
+| Data and media | PostgreSQL 17, Prisma 6, MinIO, FFmpeg                   |
+| Vision         | Python, OpenCV, Ultralytics YOLO Pose, PyTorch, SlimSAM  |
+| Engineering    | pnpm, Turborepo, Vitest, ESLint, Prettier                |
+| Deployment     | Azure Ubuntu VM, Docker Compose, Caddy, WVP/ZLMediaKit   |
 
-| 层级 | 技术                                                            |
-| ---- | --------------------------------------------------------------- |
-| Web  | Next.js 15、React 19、TypeScript、Three.js、`model-viewer`      |
-| API  | NestJS 11、Fastify 5、Zod、Swagger                              |
-| 数据 | PostgreSQL 17、Prisma 6、MinIO                                  |
-| 视觉 | Python、OpenCV、Ultralytics YOLO Pose、PyTorch、SlimSAM         |
-| 工程 | pnpm 11、Turborepo、Vitest、ESLint、Prettier、Docker Compose    |
-| 生产 | Azure Ubuntu VM、Caddy、WVP/ZLMediaKit、独立视觉 Worker Compose |
+## Local development
 
-## 仓库结构
-
-```text
-apps/web/                 Web 页面和浏览器端视觉交互
-apps/api/                 API、权限、领域服务和 Prisma schema
-apps/api/prisma/          数据库迁移
-packages/config/          共享 TypeScript 配置
-services/vision-worker/   实时视频切片、姿态分析和识别安全门控
-infra/                    本地/生产 Compose 与部署脚本
-docs/                     领域规格、部署、算法和交接文档
-```
-
-## 本地部署
-
-### 1. 前置条件
-
-- Node.js `22.23.x`
-- pnpm `11.9.0`
-- Docker Desktop / Docker Compose
-- 运行视觉 Worker 时另需 Python 3.11 或 3.12、FFmpeg，以及可访问的 HTTP(S)-FLV 摄像头地址
-
-### 2. 配置环境
+Use the versions declared in `package.json`: Node.js `>=22.23.1 <23` and pnpm `11.9.0`. Docker Compose is required for local data services. The vision worker also needs Python 3.11 or 3.12, FFmpeg and an accessible camera stream.
 
 ```bash
-git clone https://github.com/webanaiservice/climbingAI.git
-cd climbingAI
+git clone https://github.com/flackothegoat/climbing-crm-poc.git
+cd climbing-crm-poc
 cp .env.example .env
-```
-
-在 `.env` 中替换 PostgreSQL、MinIO 和 Worker 占位值。不要提交 `.env`、生产密钥、数据库备份、录像或 SSH 私钥。
-
-使用云端 AI 定线时，还需仅在 API 服务端的 `.env` 或部署平台私密环境变量中设置 `DEROUTER_API_KEY`。可按需覆盖 `DEROUTER_OPENAI_BASE` 和 `DEROUTER_ANTHROPIC_BASE`；不要设置为 `NEXT_PUBLIC_*`，也不要把密钥写进 Web 配置或提交到仓库。未配置密钥时，定线模块会提示并使用本地约束求解器。
-
-### 3. 安装并启动 Web/API
-
-```bash
 corepack enable
 pnpm install --frozen-lockfile
 pnpm services:up
@@ -95,40 +96,35 @@ pnpm db:migrate
 pnpm dev
 ```
 
-本地入口：
+Configure the database, object storage and worker placeholders in `.env`. For cloud AI, configure `DEROUTER_API_KEY` and the provider base URLs on the API server. Do not expose them through `NEXT_PUBLIC_*`. Route-setting production access also depends on `AI_ROUTE_SETTING_ENABLED` and `AI_ROUTE_SETTING_ALLOWED_EMAILS`; see the deployment notes.
 
-- Web：<http://localhost:3100>
-- API：<http://localhost:3101/api>
-- AI 定线：登录后进入 <http://localhost:3100/dashboard/route-setting>
-- Swagger：<http://localhost:3101/api/docs>
-- PostgreSQL：`localhost:5434`
-- MinIO Console：<http://localhost:9003>
+Without a model key, route setting can use the local constraint solver. Training profiles, logs, playback and manual tasks remain available, while cloud video analysis is unavailable.
 
-本地 Compose 还预留 Redis `localhost:6380`，当前核心业务不依赖 Redis。Web 开发和生产构建分别使用 `.next-dev` 与 `.next-build`，运行 `pnpm dev` 时可以安全执行构建验证。
+| Entry                    | Local address                                            |
+| ------------------------ | -------------------------------------------------------- |
+| Web                      | <http://localhost:3100>                                  |
+| API                      | <http://localhost:3101/api>                              |
+| API documentation        | <http://localhost:3101/api/docs>                         |
+| Operations route setting | <http://localhost:3100/dashboard/route-setting>          |
+| Athlete training         | <http://localhost:3100/dashboard/training>               |
+| Training-board routes    | <http://localhost:3100/dashboard/training/board-setting> |
 
-### 4. 启动本地视觉服务
+The last three entries require sign-in. Redis is reserved in local Compose but is not required by the core workflow. Development and production Next.js builds use separate output directories.
 
-先在 `.env` 配置与本地 API 一致的 `CAMERA_WORKER_TOKEN`、本地组织的 `CAMERA_WORKER_ORGANIZATION_ID` 和开发机可访问的 `CAMERA_RESOURCE_URL`：
+### Optional vision worker
+
+Configure the worker token, organization and camera source in the local environment, then run:
 
 ```bash
 pnpm worker:setup
 pnpm worker:probe
 pnpm worker:start
-```
-
-另一个终端可查看心跳：
-
-```bash
 pnpm worker:status
 ```
 
-本地 Worker 与 Azure Worker 完全独立。它必须从本地 API 读取到至少一条已发布的摄像头线路定义；输出默认保存在被 Git 忽略的 `tmp/vision-worker`。
+Local and Azure workers are separate processes. A local worker needs at least one published route definition in its local API. See the [worker guide](services/vision-worker/README.md) for lifecycle commands; no camera or production credentials are included here.
 
-修改 Worker 时可以先执行 `pnpm worker:stop`。本地开发结束前必须执行 `pnpm worker:restore`：该命令会停止旧进程，用当前工作区代码重新启动 Worker，并等待最新心跳通过；随后再以 `pnpm worker:status` 复核。前台调试仍可使用 `pnpm worker:dev`，但关闭终端会同时停止该进程。
-
-## 验证
-
-提交或部署前执行：
+## Checks and deployment
 
 ```bash
 pnpm lint
@@ -136,42 +132,36 @@ pnpm typecheck
 pnpm test
 pnpm worker:test
 pnpm build
-pnpm --filter @climbing-crm/api db:check
-pnpm --filter @climbing-crm/api exec prisma migrate status
 ```
 
-默认测试不会连接正式数据库；数据库硬化集成测试需要显式设置 `DATABASE_INTEGRATION=true`。
+Database integration tests and database invariant checks require a separately configured test database. Historical acceptance records in `docs/` describe the environment and version tested; they are not a new full-system acceptance result for every checkout.
 
-## 生产部署与版本边界
+Azure deployment is manual. Synchronizing this GitHub repository does not deploy the live demo. Back up the database, apply the required Prisma migrations and validate the Web/API/media/worker services before releasing. The training module and persisted training-board routes introduce migrations that must be included when upgrading an older deployment.
 
-开发顺序固定为：
+## Implementation notes
 
-```text
-本地 feature/fix 分支 → 本地验证 → 本地 main → Azure 人工发布与验收 → GitHub 同步/Release
-```
+- [Training center implementation and acceptance](docs/训练中心一期实现与验收.md)
+- [Operations and training navigation](docs/业务结构与入口拆分-2026-09-27.md)
+- [Manual training-board routes and tablet interaction](docs/天宇训练板手工定线-2026-10-15.md)
+- [Ground-floor 3D wall editor](docs/天宇一楼三维定线-2026-10-16.md)
+- [Photo-to-GLB registration](docs/天宇板照片与GLB配准-2026-09-26.md)
+- [Registration tooling](tools/tianyu-registration/README.md)
+- [Camera evidence and human review](docs/摄像头识别历史与人工复核设计.md)
+- [Azure deployment](docs/Azure虚拟机部署说明.md)
+- [Repository and CI policy](docs/Git仓库与CI策略.md)
 
-Azure 是唯一演示环境，当前不启用自动 CD。发布必须先备份 PostgreSQL，再运行 `prisma migrate deploy`，最后验证 Web、API、WVP、媒体流和视觉服务。详见 [Azure 虚拟机部署说明](docs/Azure虚拟机部署说明.md) 和 [Git 仓库与 CI 策略](docs/Git仓库与CI策略.md)。
+The detailed implementation notes are currently in Chinese. They contain historical design and acceptance records; the source code and dated feature notes should be checked together when older documents describe a superseded state.
 
-## 文档入口
+## Known limits
 
-- [当前状态与后续开发交接](docs/POC当前状态与后续开发交接文档.md)
-- [2026-09-16 登录入口优化发布记录](docs/发布记录-2026-09-16.md)
-- [2026-09-15 正式发布记录](docs/发布记录-2026-09-15.md)
-- [2026-09-11 正式发布记录](docs/发布记录-2026-09-11.md)
-- [Azure 虚拟机部署说明](docs/Azure虚拟机部署说明.md)
-- [摄像头实时视频与攀爬识别 POC](docs/摄像头实时视频与攀爬识别POC.md)
-- [识别历史与人工复核设计](docs/摄像头识别历史与人工复核设计.md)
-- [视觉 Worker 运行说明](services/vision-worker/README.md)
-- [岩点模块设计与全栈实现详解](docs/岩点模块设计与全栈实现详解.md)
-- [实地考察与演示确认清单](docs/岩馆实地考察与POC演示确认清单.md)
+- This is a POC, without established commercial multi-gym SLAs, billing, disaster-recovery validation or compliance certification.
+- AI routes need human review, installation checks and physical trials. Editing a candidate invalidates its original estimated score; the estimates are not calibrated route grades or safety guarantees.
+- Camera analysis does not establish reliable multi-climber tracking, multi-camera 3D judgement or competition officiating. Camera or wall changes require recalibration.
+- Training review samples the selected current video. Historical video comparison is manual; historical records provided as text do not mean the model has analyzed the older videos.
+- The 3D wall uses inferred geometry and simplified holds. It is not a construction model or a contact-force/collision simulator.
+- RFID hardware acceptance, full cross-gym asset circulation and automatic dynamic-IP allowlisting remain outside the validated mainline scope.
+- Training workloads need further pagination, export, queue scaling and operational monitoring before larger-scale use.
 
-## 已知边界
+## Development history
 
-- AI 定线模块沿用原 POC 的单点产品目录和天宇板视觉点位，固定板编辑存于当前浏览器 `localStorage`；它尚未与平台数据库中的岩点库存、墙孔安装记录或线路版本自动同步。切换域名/端口或浏览器不会自动迁移已有本机存档。
-- AI 候选是人工审核草案，不能直接发布为平台正式线路或代替现场试爬、落地区域与安装安全检查。生成接口要求登录和定线权限，并按账号限流 12 次/小时。
-
-- 单摄像头 POC 暂不支持多人同时攀爬、多机位三维接触确认或通用赛事判罚。
-- 摄像头 PTZ、变焦、分辨率、安装位置或墙面发生变化后，必须重新建立无人墙面参考并复核线路视觉定义。
-- 识别精度仍需通过真实正负样本集量化；低质量画面会暂停识别，而不是生成猜测记录。
-- 岩馆动态公网 IP 变化目前仍需人工更新 Azure NSG；自动白名单实验没有合入 `main`。
-- RFID 批量硬件接入和跨馆租借业务流程仍待后续阶段完成。
+The original project is maintained at [flackothegoat/climbing-crm-poc](https://github.com/flackothegoat/climbing-crm-poc). Subsequent development from [webanaiservice/climbingAI](https://github.com/webanaiservice/climbingAI) has been incorporated with its original authorship and merge history intact. See the Git history for individual contributions.
