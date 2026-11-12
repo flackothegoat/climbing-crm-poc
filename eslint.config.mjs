@@ -27,6 +27,10 @@ export default tseslint.config(
     },
   },
   {
+    files: ['packages/config/*.js'],
+    languageOptions: { sourceType: 'commonjs' },
+  },
+  {
     files: ['**/next.config.mjs'],
     languageOptions: { globals: { process: 'readonly' } },
   },
